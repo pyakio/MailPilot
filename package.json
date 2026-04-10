@@ -1,0 +1,15 @@
+{
+  "name": "cloud-email-marketing",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "start": "node server/index.js",
+    "client-install": "npm install --prefix client",
+    "server-install": "npm install --prefix server",
+    "install-all": "npm run server-install && npm run client-install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
