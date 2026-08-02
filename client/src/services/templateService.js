@@ -1,8 +1,8 @@
-import api from './api';
+import apiClient from '../lib/axios';
 
 export const templateService = {
-  getTemplates: () => api.get('/templates'),
-  createTemplate: (data) => api.post('/templates', data),
+  getTemplates: () => apiClient.get('/templates'),
+  createTemplate: (data) => apiClient.post('/templates', data),
 };
 
 export default templateService;

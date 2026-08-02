@@ -1,10 +1,10 @@
-import api from './api';
+import apiClient from '../lib/axios';
 
 export const contactService = {
-  getContacts: () => api.get('/contacts'),
-  createContact: (data) => api.post('/contacts', data),
-  deleteContact: (id) => api.delete(`/contacts/${id}`),
-  importContacts: (rows) => api.post('/contacts/import', { rows }),
+  getContacts: () => apiClient.get('/contacts'),
+  createContact: (data) => apiClient.post('/contacts', data),
+  deleteContact: (id) => apiClient.delete(`/contacts/${id}`),
+  importContacts: (rows) => apiClient.post('/contacts/import', { rows }),
 };
 
 export default contactService;

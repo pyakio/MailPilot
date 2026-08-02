@@ -1,8 +1,8 @@
-import api from './api';
+import apiClient from '../lib/axios';
 
 export const analyticsService = {
-  getSummary: () => api.get('/summary'),
-  getAnalytics: () => api.get('/analytics'),
+  getSummary: () => apiClient.get('/summary'),
+  getAnalytics: () => apiClient.get('/analytics'),
 };
 
 export default analyticsService;

@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 60" fill="none">
   <rect width="48" height="48" y="6" rx="14" fill="url(#brand_grad_dark)"/>
   <path d="M36 21L25.5833 30.6715C24.6821 31.5075 23.3179 31.5075 22.4167 30.6715L12 21" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
   <rect x="12" y="21" width="24" height="18" rx="3" stroke="white" stroke-width="3" stroke-linejoin="round"/>
-  <text x="60" y="38" font-family="Inter, system-ui, sans-serif" font-size="26" font-weight="800" fill="#FFFFFF" letter-spacing="-0.5">MailPilot<tspan fill="#6366F1">.io</tspan></text>
+  <text x="60" y="38" font-family="Inter, system-ui, sans-serif" font-size="26" font-weight="800" fill="#FFFFFF" letter-spacing="-0.5">MailPilot</text>
   <defs>
     <linearGradient id="brand_grad_dark" x1="0" y1="6" x2="48" y2="54" gradientUnits="userSpaceOnUse">
       <stop stop-color="#4F46E5"/>
