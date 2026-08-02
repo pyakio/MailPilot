@@ -1,16 +1,22 @@
 {
-  "name": "cloud-email-marketing-server",
+  "name": "mailpilot-server",
   "private": true,
   "version": "0.1.0",
+  "description": "MailPilot Backend API Server & Campaign Automation Telemetry Engine",
+  "author": "MailPilot Engineering Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pyakio/MailPilot.git"
+  },
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon index.js",
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "node index.js"
   },
   "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.18.2",
     "body-parser": "^1.20.2",
-    "nodemon": "^3.0.1"
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
   }
 }

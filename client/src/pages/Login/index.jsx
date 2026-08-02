@@ -10,7 +10,7 @@ export function Login() {
   const { login } = useAuth();
   const { addToast } = useToast();
 
-  const [email, setEmail] = useState('alex.morgan@acmecloud.io');
+  const [email, setEmail] = useState('alex.morgan@mailpilot.io');
   const [password, setPassword] = useState('••••••••••••');
   const [loading, setLoading] = useState(false);
 
@@ -21,7 +21,7 @@ export function Login() {
       await login(email, password);
       addToast({
         title: 'Welcome Back!',
-        message: 'Successfully logged into CloudMail Dashboard.',
+        message: 'Successfully logged into MailPilot Dashboard.',
         type: 'success',
       });
       navigate('/');
@@ -43,7 +43,7 @@ export function Login() {
               <FiMail className="w-5 h-5" />
             </div>
             <span className="font-extrabold text-slate-900 dark:text-white text-xl tracking-tight">
-              CloudMail<span className="text-indigo-600 dark:text-indigo-400">.io</span>
+              MailPilot<span className="text-indigo-600 dark:text-indigo-400">.io</span>
             </span>
           </div>
 
@@ -52,7 +52,7 @@ export function Login() {
               Sign in to your account
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-              Enter your credentials to access your email marketing campaigns and telemetry.
+              Enter your credentials to access your email marketing campaigns and AI automation telemetry.
             </p>
           </div>
 
@@ -114,7 +114,7 @@ export function Login() {
         </div>
 
         <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 text-center">
-          © 2026 CloudMail Inc. Enterprise SaaS Platform.
+          © 2026 MailPilot Inc. AI-Powered Campaign Automation Platform.
         </div>
       </div>
 
@@ -123,13 +123,13 @@ export function Login() {
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/60 via-slate-900 to-slate-950" />
         <div className="relative z-10 max-w-lg text-white space-y-6">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-bold">
-            <FiZap className="fill-current" /> High-Deliverability Cloud Engine
+            <FiZap className="fill-current" /> High-Deliverability AI Engine
           </div>
           <h2 className="text-4xl font-extrabold tracking-tight leading-tight">
-            Enterprise Email Marketing & Automation Drips.
+            AI-Powered Email Marketing & Campaign Automation.
           </h2>
           <p className="text-slate-300 text-sm leading-relaxed">
-            Join over 12,000 SaaS teams scaling customer engagement with real-time telemetry, automated triggers, and DKIM/SPF domain verification.
+            Join over 12,000 high-growth SaaS teams scaling customer engagement with real-time telemetry, automated triggers, and DKIM/SPF domain verification.
           </p>
 
           <div className="space-y-3 pt-4">

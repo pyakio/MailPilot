@@ -12,11 +12,7 @@ import {
   FiCopy,
   FiEye,
   FiEyeOff,
-  FiCheckCircle,
   FiCreditCard,
-  FiZap,
-  FiBell,
-  FiShield,
 } from 'react-icons/fi';
 
 export function Settings() {
@@ -26,12 +22,12 @@ export function Settings() {
   const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'sender' | 'api' | 'billing'
   const [profileForm, setProfileForm] = useState({
     name: user?.name || 'Alex Morgan',
-    email: user?.email || 'alex@acmecloud.io',
+    email: user?.email || 'alex@mailpilot.io',
     role: user?.role || 'Head of Growth',
-    company: user?.company || 'Acme SaaS Corp',
+    company: user?.company || 'MailPilot SaaS Inc.',
   });
 
-  const [apiKey] = useState('cm_live_9981a88b776211ff09aa');
+  const [apiKey] = useState('mp_live_9981a88b776211ff09aa');
   const [showKey, setShowKey] = useState(false);
 
   const handleSaveProfile = (e) => {
@@ -173,7 +169,7 @@ export function Settings() {
               </label>
               <input
                 type="text"
-                defaultValue="Alex from Acme SaaS"
+                defaultValue="Alex from MailPilot"
                 className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl"
               />
             </div>
@@ -184,7 +180,7 @@ export function Settings() {
               </label>
               <input
                 type="email"
-                defaultValue="support@acmecloud.io"
+                defaultValue="support@mailpilot.io"
                 className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl"
               />
             </div>
@@ -192,7 +188,7 @@ export function Settings() {
             <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-indigo-900 dark:text-indigo-200">
-                  Sending Domain Status: mail.acmecloud.io
+                  Sending Domain Status: mail.mailpilot.io
                 </span>
                 <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500 text-white">
                   VERIFIED
@@ -238,7 +234,7 @@ export function Settings() {
 
       {/* Billing Tab */}
       {activeTab === 'billing' && (
-        <Card title="Subscription & SaaS Tiers" subtitle="Manage your CloudMail enterprise marketing plan">
+        <Card title="Subscription & SaaS Tiers" subtitle="Manage your MailPilot enterprise marketing plan">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Starter</span>

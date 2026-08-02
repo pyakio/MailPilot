@@ -1,4 +1,4 @@
-// Backend API for the email marketing demo
+// MailPilot Backend API for email marketing & campaign automation
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -15,12 +15,12 @@ let contactId = 1;
 let templateId = 1;
 
 const campaigns = [
-  { id: campaignId++, name: 'Welcome Drip', subject: 'Welcome to My SaaS', templateId: 1, list: 'All Contacts', status: 'draft', scheduledAt: null, sent: 0, opened: 0, clicked: 0, bounces: 0 },
+  { id: campaignId++, name: 'Welcome Drip', subject: 'Welcome to MailPilot SaaS', templateId: 1, list: 'All Contacts', status: 'draft', scheduledAt: null, sent: 0, opened: 0, clicked: 0, bounces: 0 },
   { id: campaignId++, name: 'Spring Offer', subject: 'Spring Discounts Inside', templateId: 2, list: 'All Contacts', status: 'scheduled', scheduledAt: new Date(Date.now() + 3600 * 1000).toISOString(), sent: 0, opened: 0, clicked: 0, bounces: 0 }
 ];
 
 const templates = [
-  { id: templateId++, title: 'Simple Welcome', body: 'Hi {{name}},\n\nWelcome to our platform. We are happy to have {{company}} onboard.' },
+  { id: templateId++, title: 'Simple Welcome', body: 'Hi {{name}},\n\nWelcome to MailPilot. We are happy to have {{company}} onboard.' },
   { id: templateId++, title: 'Promo Highlight', body: 'Hello {{name}},\n\nOur best price for {{company}} is live now! Click to learn more.' }
 ];
 
@@ -144,8 +144,8 @@ app.get('/api/analytics', (req, res) => {
   });
 });
 
-app.get('/api/status', (req, res) => res.json({ status: 'ok' }));
+app.get('/api/status', (req, res) => res.json({ status: 'ok', service: 'MailPilot API' }));
 
 app.listen(PORT, () => {
-  console.log(`Cloud Email Marketing API running on http://localhost:${PORT}`);
+  console.log(`MailPilot API running on http://localhost:${PORT}`);
 });

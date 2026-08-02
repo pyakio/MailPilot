@@ -16,7 +16,7 @@ export function NotFound() {
           Page Not Found
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">
-          The page you are looking for might have been moved, deleted, or does not exist on our marketing cloud servers.
+          The page you are looking for might have been moved, deleted, or does not exist on our MailPilot servers.
         </p>
         <Link to="/">
           <PrimaryButton icon={FiHome} fullWidth size="lg">

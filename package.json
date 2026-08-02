@@ -1,10 +1,28 @@
 {
-  "name": "cloud-email-marketing",
+  "name": "mailpilot",
   "private": true,
   "version": "0.1.0",
+  "description": "AI-Powered Email Marketing & Campaign Automation Platform",
+  "author": "MailPilot Engineering Team",
+  "license": "MIT",
+  "homepage": "https://github.com/pyakio/MailPilot#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pyakio/MailPilot.git"
+  },
+  "keywords": [
+    "email-marketing",
+    "saas",
+    "campaign-automation",
+    "mailpilot",
+    "react",
+    "vite",
+    "tailwindcss"
+  ],
   "scripts": {
     "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "start": "node server/index.js",
+    "build": "npm run build --prefix client",
     "client-install": "npm install --prefix client",
     "server-install": "npm install --prefix server",
     "install-all": "npm run server-install && npm run client-install"

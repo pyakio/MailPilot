@@ -5,10 +5,10 @@ export const AuthContext = createContext();
 const MOCK_USER = {
   id: 'usr_9981',
   name: 'Alex Morgan',
-  email: 'alex.morgan@acmecloud.io',
+  email: 'alex.morgan@mailpilot.io',
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-  role: 'Head of Marketing',
-  company: 'Acme SaaS Labs',
+  role: 'Head of Growth',
+  company: 'MailPilot SaaS Inc.',
   plan: 'Enterprise Pro',
 };
 

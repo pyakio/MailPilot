@@ -24,7 +24,7 @@ function ProtectedRoute({ children }) {
 
 export function AppRoutes() {
   return (
-    <Suspense fallback={<LoadingSpinner size="lg" message="Loading CloudMail Workspace..." />}>
+    <Suspense fallback={<LoadingSpinner size="lg" message="Loading MailPilot Workspace..." />}>
       <Routes>
         <Route path="/login" element={<Login />} />
 

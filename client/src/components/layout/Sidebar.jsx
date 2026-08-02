@@ -45,10 +45,10 @@ export function Sidebar({ mobileOpen, setMobileOpen, collapsed, setCollapsed }) 
           {!collapsed && (
             <div className="flex flex-col min-w-0">
               <span className="font-extrabold text-slate-900 dark:text-white tracking-tight text-base truncate">
-                CloudMail<span className="text-indigo-600 dark:text-indigo-400">.io</span>
+                MailPilot<span className="text-indigo-600 dark:text-indigo-400">.io</span>
               </span>
               <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400">
-                Marketing Cloud
+                AI Email Platform
               </span>
             </div>
           )}
@@ -135,7 +135,7 @@ export function Sidebar({ mobileOpen, setMobileOpen, collapsed, setCollapsed }) 
                   {user?.name || 'Alex Morgan'}
                 </span>
                 <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                  {user?.email || 'alex@acmecloud.io'}
+                  {user?.email || 'alex@mailpilot.io'}
                 </span>
               </div>
             )}
