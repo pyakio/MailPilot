@@ -6,7 +6,8 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000,
+  timeout: 15000,
+  withCredentials: true, // Send httpOnly cookies with every request
 });
 
 apiClient.interceptors.response.use(
@@ -15,9 +16,18 @@ apiClient.interceptors.response.use(
     const message =
       error.response?.data?.error ||
       error.response?.data?.message ||
-      error.message ||
-      'An unexpected network error occurred';
-    return Promise.reject(new Error(message));
+      (error.response?.status === 404
+        ? 'Resource not found'
+        : error.response?.status === 401
+        ? 'Authentication required or invalid credentials'
+        : error.response?.status === 403
+        ? 'Access denied'
+        : error.message || 'An unexpected network error occurred');
+
+    const err = new Error(message);
+    err.status = error.response?.status;
+    err.data = error.response?.data;
+    return Promise.reject(err);
   }
 );
 

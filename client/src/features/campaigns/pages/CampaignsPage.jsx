@@ -1,106 +1,88 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { PageHeader } from '../../../app/layouts/PageHeader';
-import { Card } from '../../../components/ui/Card';
-import { PrimaryButton } from '../../../components/ui/PrimaryButton';
-import { SearchBar } from '../../../components/ui/SearchBar';
-import { RecentCampaignsTable } from '../../../components/tables/RecentCampaignsTable';
-import { CampaignFormModal } from '../../../components/forms/CampaignFormModal';
-import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog';
-import { Pagination } from '../../../components/ui/Pagination';
-import { SkeletonLoader } from '../../../components/ui/SkeletonLoader';
-import { EmptyState } from '../../../components/ui/EmptyState';
+import React, { useState, useEffect } from 'react';
+import Card from '../../../shared/ui/Card';
+import Button from '../../../shared/ui/Button';
+import Input from '../../../shared/ui/Input';
+import Badge from '../../../shared/ui/Badge';
+import Skeleton from '../../../shared/ui/Skeleton';
+import Table from '../../../shared/ui/Table';
+import Dropdown from '../../../shared/ui/Dropdown';
+import CampaignFormModal from '../../../shared/components/forms/CampaignFormModal';
+import ConfirmationDialog from '../../../shared/ui/ConfirmationDialog';
 import { campaignService } from '../../../services/campaignService';
 import { templateService } from '../../../services/templateService';
 import { useToast } from '../../../hooks/useToast';
-import { useDebounce } from '../../../hooks/useDebounce';
-import { FiPlus, FiSend } from 'react-icons/fi';
+import { formatDate } from '../../../utils/formatters';
+import {
+  FiPlus,
+  FiSearch,
+  FiMoreHorizontal,
+  FiEdit2,
+  FiTrash2,
+  FiSend,
+  FiClock,
+  FiCheckCircle,
+} from 'react-icons/fi';
 
 export function CampaignsPage() {
   const { addToast } = useToast();
-
-  const [loading, setLoading] = useState(true);
   const [campaigns, setCampaigns] = useState([]);
   const [templates, setTemplates] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [filterStatus, setFilterStatus] = useState('all');
 
-  // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
-  const [sendingId, setSendingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [sendingId, setSendingId] = useState(null);
 
-  const debouncedSearch = useDebounce(search, 250);
-
-  const fetchData = useCallback(async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
-      const [cmpRes, tmplRes] = await Promise.all([
+      const [campRes, tmplRes] = await Promise.all([
         campaignService.getCampaigns(),
-        templateService.getTemplates(),
+        templateService.getTemplates().catch(() => []),
       ]);
-      setCampaigns(cmpRes);
+      setCampaigns(campRes);
       setTemplates(tmplRes);
     } catch (err) {
-      addToast({ title: 'Error Loading Campaigns', message: err.message, type: 'error' });
+      addToast({ title: 'Error', message: err.message, type: 'error' });
     } finally {
       setLoading(false);
     }
-  }, [addToast]);
+  };
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    loadData();
+  }, []);
 
-  const filteredCampaigns = useMemo(() => {
-    return campaigns.filter((c) => {
-      const matchesSearch =
-        c.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-        c.subject.toLowerCase().includes(debouncedSearch.toLowerCase());
-      const matchesStatus =
-        statusFilter === 'all' || c.status?.toLowerCase() === statusFilter.toLowerCase();
-      return matchesSearch && matchesStatus;
-    });
-  }, [campaigns, debouncedSearch, statusFilter]);
-
-  const pageSize = 10;
-  const paginatedCampaigns = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredCampaigns.slice(start, start + pageSize);
-  }, [filteredCampaigns, currentPage]);
+  const filteredCampaigns = campaigns.filter((c) => {
+    const matchesSearch =
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      (c.subject && c.subject.toLowerCase().includes(search.toLowerCase()));
+    const matchesFilter =
+      filterStatus === 'all' || c.status?.toLowerCase() === filterStatus.toLowerCase();
+    return matchesSearch && matchesFilter;
+  });
 
   const handleSave = async (payload) => {
     try {
       setSubmitting(true);
       if (editingCampaign) {
         await campaignService.updateCampaign(editingCampaign.id, payload);
-        addToast({ title: 'Campaign Updated', message: `Saved "${payload.name}".`, type: 'success' });
+        addToast({ title: 'Success', message: 'Campaign updated.', type: 'success' });
       } else {
         await campaignService.createCampaign(payload);
-        addToast({ title: 'Campaign Created', message: `Added "${payload.name}".`, type: 'success' });
+        addToast({ title: 'Success', message: 'Campaign created.', type: 'success' });
       }
       setIsModalOpen(false);
       setEditingCampaign(null);
-      fetchData();
+      loadData();
     } catch (err) {
-      addToast({ title: 'Save Failed', message: err.message, type: 'error' });
+      addToast({ title: 'Error', message: err.message, type: 'error' });
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const handleSendNow = async (id) => {
-    try {
-      setSendingId(id);
-      await campaignService.sendCampaignNow(id);
-      addToast({ title: 'Campaign Sent', message: 'Email sequence triggered.', type: 'success' });
-      fetchData();
-    } catch (err) {
-      addToast({ title: 'Send Error', message: err.message, type: 'error' });
-    } finally {
-      setSendingId(null);
     }
   };
 
@@ -109,89 +91,143 @@ export function CampaignsPage() {
     try {
       setSubmitting(true);
       await campaignService.deleteCampaign(deletingId);
-      addToast({ title: 'Campaign Deleted', message: 'Campaign permanently deleted.', type: 'info' });
+      addToast({ title: 'Deleted', message: 'Campaign deleted.', type: 'info' });
       setDeletingId(null);
-      fetchData();
+      loadData();
     } catch (err) {
-      addToast({ title: 'Delete Failed', message: err.message, type: 'error' });
+      addToast({ title: 'Error', message: err.message, type: 'error' });
     } finally {
       setSubmitting(false);
     }
   };
 
-  const statuses = [
-    { id: 'all', label: 'All Campaigns' },
-    { id: 'draft', label: 'Drafts' },
-    { id: 'scheduled', label: 'Scheduled' },
-    { id: 'sent', label: 'Sent' },
-  ];
+  const handleSendNow = async (id) => {
+    try {
+      setSendingId(id);
+      await campaignService.sendCampaign(id);
+      addToast({ title: 'Broadcast Sent', message: 'Campaign dispatched to audience.', type: 'success' });
+      loadData();
+    } catch (err) {
+      addToast({ title: 'Send Failed', message: err.message, type: 'error' });
+    } finally {
+      setSendingId(null);
+    }
+  };
+
+  const getStatusBadge = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'sent':
+        return <Badge variant="success">Sent</Badge>;
+      case 'scheduled':
+        return <Badge variant="warning">Scheduled</Badge>;
+      case 'draft':
+      default:
+        return <Badge variant="default">Draft</Badge>;
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Campaigns"
-        description="Design, schedule, and monitor automated email marketing broadcasts."
-        badge={`${filteredCampaigns.length} Total`}
-        actions={
-          <PrimaryButton icon={FiPlus} onClick={() => { setEditingCampaign(null); setIsModalOpen(true); }}>
-            Create Campaign
-          </PrimaryButton>
-        }
-      />
-
-      <Card noPadding>
-        <div className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800">
-          <SearchBar value={search} onChange={setSearch} placeholder="Search campaigns..." />
-
-          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl w-full sm:w-auto">
-            {statuses.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => { setStatusFilter(s.id); setCurrentPage(1); }}
-                className={`flex-1 sm:flex-none px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                  statusFilter === s.id
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
+    <div className="space-y-6 max-w-6xl mx-auto pb-12 animate-fade-in">
+      {/* Storytelling Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border)] pb-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-[#E8A33D] text-xl">⚡</span>
+            <h1 className="text-2xl font-bold font-heading text-[var(--text)]">Campaigns</h1>
+            <Badge variant="amber">{campaigns.length} Broadcasts</Badge>
           </div>
+          <p className="text-sm text-[var(--text-secondary)] mt-1">
+            Create, schedule, dispatch, and track live email marketing broadcasts.
+          </p>
         </div>
+        <Button variant="primary" icon={FiPlus} onClick={() => { setEditingCampaign(null); setIsModalOpen(true); }}>
+          New Campaign
+        </Button>
+      </div>
 
-        {loading ? (
-          <SkeletonLoader type="table" count={5} />
-        ) : paginatedCampaigns.length === 0 ? (
-          <EmptyState
-            title="No campaigns found"
-            description={search ? `No campaigns match "${search}".` : 'Create your first email campaign to get started.'}
-            actionLabel="Create Campaign"
-            onAction={() => { setEditingCampaign(null); setIsModalOpen(true); }}
-            icon={FiSend}
+      {/* Filters Bar */}
+      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
+        <div className="w-full sm:w-80">
+          <Input
+            icon={FiSearch}
+            placeholder="Search campaigns by name or subject..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
           />
+        </div>
+        <div className="flex gap-2 w-full sm:w-auto">
+          {['all', 'draft', 'scheduled', 'sent'].map((st) => (
+            <button
+              key={st}
+              onClick={() => setFilterStatus(st)}
+              className={`px-3 py-1.5 rounded-[6px] text-xs font-mono font-medium capitalize transition-colors ${
+                filterStatus === st
+                  ? 'bg-[#E8A33D] text-[#14171C] font-semibold'
+                  : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] border border-[var(--border)]'
+              }`}
+            >
+              {st}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Table List */}
+      <Card noPadding>
+        {loading ? (
+          <div className="p-6 space-y-4">
+            <Skeleton className="h-[68px]" />
+            <Skeleton className="h-[68px]" />
+            <Skeleton className="h-[68px]" />
+          </div>
+        ) : filteredCampaigns.length === 0 ? (
+          <div className="py-12 text-center text-[var(--text-muted)]">
+            <p className="text-[14px]">No campaigns found matching criteria.</p>
+          </div>
         ) : (
-          <>
-            <RecentCampaignsTable
-              campaigns={paginatedCampaigns}
-              onEdit={(c) => { setEditingCampaign(c); setIsModalOpen(true); }}
-              onSendNow={handleSendNow}
-              onDelete={(id) => setDeletingId(id)}
-              sendingId={sendingId}
-            />
-            <Pagination
-              currentPage={currentPage}
-              totalItems={filteredCampaigns.length}
-              pageSize={pageSize}
-              onPageChange={setCurrentPage}
-            />
-          </>
+          <Table headers={['Name', 'Status', 'Date', 'Stats', 'Actions']}>
+            {filteredCampaigns.map((c, idx) => (
+              <tr key={c.id} className="h-[64px] hover:bg-[var(--surface-hover)] transition-colors">
+                <td className="px-6 py-4">
+                  <div className="font-semibold text-[var(--text)] text-[14px]">{c.name}</div>
+                  <div className="text-[12px] text-[var(--text-secondary)] truncate max-w-xs">{c.subject}</div>
+                </td>
+                <td className="px-6 py-4">{getStatusBadge(c.status)}</td>
+                <td className="px-6 py-4 text-[13px] text-[var(--text-secondary)] font-mono">
+                  {c.sentAt ? formatDate(c.sentAt) : c.scheduledAt ? formatDate(c.scheduledAt) : '—'}
+                </td>
+                <td className="px-6 py-4 text-[13px] text-[var(--text-secondary)] font-mono">
+                  {c.status?.toLowerCase() === 'sent' ? (
+                    <span>
+                      <strong className="text-[var(--text)]">{c.stats?.sent ?? 0}</strong> sent / <strong className="text-[#E8A33D] font-bold">{c.stats?.opened ?? 0}</strong> opens
+                    </span>
+                  ) : (
+                    <span className="text-[var(--text-muted)]">Draft mode</span>
+                  )}
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <Dropdown
+                    trigger={
+                      <button className="p-1.5 rounded-[6px] text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors">
+                        <FiMoreHorizontal className="w-4 h-4" />
+                      </button>
+                    }
+                    items={[
+                      { label: 'Edit', icon: FiEdit2, onClick: () => { setEditingCampaign(c); setIsModalOpen(true); } },
+                      ...(c.status?.toLowerCase() !== 'sent' ? [{ label: sendingId === c.id ? 'Sending...' : 'Send Now', icon: FiSend, onClick: () => handleSendNow(c.id) }] : []),
+                      { label: 'Delete', icon: FiTrash2, danger: true, onClick: () => setDeletingId(c.id) },
+                    ]}
+                  />
+                </td>
+              </tr>
+            ))}
+          </Table>
         )}
       </Card>
 
       <CampaignFormModal
         isOpen={isModalOpen}
-        onClose={() => { setIsModalOpen(false); setEditingCampaign(null); }}
+        onClose={() => setIsModalOpen(false)}
         onSubmit={handleSave}
         initialData={editingCampaign}
         templates={templates}
@@ -203,7 +239,7 @@ export function CampaignsPage() {
         onClose={() => setDeletingId(null)}
         onConfirm={handleDelete}
         title="Delete Campaign"
-        message="Are you sure you want to permanently delete this campaign?"
+        message="Are you sure you want to delete this campaign? This action cannot be undone."
         loading={submitting}
       />
     </div>

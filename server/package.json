@@ -1,22 +1,36 @@
 {
   "name": "mailpilot-server",
-  "private": true,
-  "version": "0.1.0",
-  "description": "MailPilot Backend API Server & Campaign Automation Telemetry Engine",
-  "author": "MailPilot Engineering Team",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/pyakio/MailPilot.git"
-  },
+  "version": "2.0.0",
+  "description": "MailPilot API Server — Express.js REST API with JWT auth and Prisma PostgreSQL",
   "main": "index.js",
   "scripts": {
+    "dev": "nodemon index.js",
     "start": "node index.js",
-    "dev": "node index.js"
+    "test": "node --test tests/**/*.test.js"
+  },
+
+  "prisma": {
+    "schema": "../prisma/schema.prisma"
   },
   "dependencies": {
-    "body-parser": "^1.20.2",
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
-    "express": "^4.18.2"
+    "dotenv": "^16.4.5",
+    "express": "^4.18.2",
+    "express-rate-limit": "^8.6.2",
+    "google-auth-library": "^9.9.0",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^9.0.5",
+    "resend": "^6.20.0",
+    "sanitize-html": "^2.17.7",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4",
+    "prisma": "^5.22.0",
+    "supertest": "^7.2.2"
   }
 }

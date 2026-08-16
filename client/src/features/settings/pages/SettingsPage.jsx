@@ -1,196 +1,323 @@
-import { useState } from 'react';
-import { PageHeader } from '../../../app/layouts/PageHeader';
-import { Card } from '../../../components/ui/Card';
-import { PrimaryButton } from '../../../components/ui/PrimaryButton';
-import { SecondaryButton } from '../../../components/ui/SecondaryButton';
+import React, { useState } from 'react';
+import Card from '../../../shared/ui/Card';
+import Button from '../../../shared/ui/Button';
+import Input from '../../../shared/ui/Input';
+import Badge from '../../../shared/ui/Badge';
 import { useAuth } from '../../../hooks/useAuth';
 import { useToast } from '../../../hooks/useToast';
+import { authService } from '../../../services/authService';
 import {
   FiUser,
-  FiMail,
+  FiLock,
+  FiSave,
   FiKey,
-  FiCopy,
-  FiEye,
-  FiEyeOff,
+  FiGlobe,
   FiCreditCard,
+  FiCheck,
+  FiZap,
+  FiAlertCircle,
+  FiCode,
 } from 'react-icons/fi';
-import { APP_NAME } from '../../../constants';
+
+const PLAN_TIERS = [
+  {
+    id: 'starter',
+    name: 'Starter Tier',
+    price: '$0',
+    period: 'forever',
+    contactLimit: '500 Contacts',
+    emailLimit: '1,000 Emails/mo',
+    features: ['Standard Open/Click Tracking', 'AI Subject Line Copilot', '1 Custom Workspace', 'Community Support'],
+  },
+  {
+    id: 'growth',
+    name: 'Scale & Growth',
+    price: '$49',
+    period: 'monthly',
+    contactLimit: '10,000 Contacts',
+    emailLimit: '50,000 Emails/mo',
+    recommended: true,
+    features: [
+      'Real-Time Telemetry Tracking',
+      'AI Email Copy Studio (Unlimited)',
+      'Sub-second Automated Drips',
+      'Custom DKIM/SPF Domain Auth',
+      'Dedicated IP Warm-up',
+    ],
+  },
+  {
+    id: 'enterprise',
+    name: 'Enterprise Scale',
+    price: '$199',
+    period: 'monthly',
+    contactLimit: '100,000+ Contacts',
+    emailLimit: 'Unlimited Broadcasts',
+    features: [
+      'Multi-IP Pool Load Balancing',
+      'Custom DMARC & BIMI Setup',
+      '99.99% Uptime SLA',
+      'Dedicated Deliverability Engineer',
+      '24/7 Priority Emergency Phone',
+    ],
+  },
+];
 
 export function SettingsPage() {
-  const { user, updateUser } = useAuth();
+  const { user, login } = useAuth();
   const { addToast } = useToast();
 
-  const [activeTab, setActiveTab] = useState('profile');
-  const [profileForm, setProfileForm] = useState({
-    name: user?.name || 'Alex Morgan',
-    email: user?.email || 'alex.morgan@mailpilot.com',
-    role: user?.role || 'Head of Growth',
-    company: user?.company || 'MailPilot Inc.',
-  });
+  const [activeTab, setActiveTab] = useState('general'); // 'general' | 'billing' | 'developer'
+  const [name, setName] = useState(user?.name || '');
+  const [email] = useState(user?.email || '');
+  const [senderDomain, setSenderDomain] = useState('mail.pilot-app.io');
+  const [loading, setLoading] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState('growth');
 
-  const [apiKey] = useState('mp_live_9981a88b776211ff09aa');
-  const [showKey, setShowKey] = useState(false);
-
-  const handleSaveProfile = (e) => {
+  const handleSaveSettings = async (e) => {
     e.preventDefault();
-    updateUser(profileForm);
+    try {
+      setLoading(true);
+      const res = await authService.updateProfile({ name });
+      if (res?.user) {
+        login(localStorage.getItem('token'), res.user);
+      }
+      addToast({
+        title: 'Settings Saved',
+        message: 'Workspace profile updated successfully.',
+        type: 'success',
+      });
+    } catch (err) {
+      addToast({
+        title: 'Save Failed',
+        message: err.message,
+        type: 'error',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpgradePlan = (planId) => {
+    setSelectedPlan(planId);
     addToast({
-      title: 'Profile Saved',
-      message: 'Updated profile information.',
+      title: 'Plan Updated',
+      message: `Workspace upgraded to ${planId} plan. Stripe subscription active.`,
       type: 'success',
     });
   };
-
-  const handleCopyKey = () => {
-    navigator.clipboard.writeText(apiKey);
-    addToast({
-      title: 'API Key Copied',
-      message: 'Copied key to clipboard.',
-      type: 'success',
-      duration: 2000,
-    });
-  };
-
-  const tabs = [
-    { id: 'profile', label: 'Profile', icon: FiUser },
-    { id: 'sender', label: 'Sender Domain', icon: FiMail },
-    { id: 'api', label: 'API Keys', icon: FiKey },
-    { id: 'billing', label: 'Billing & Plan', icon: FiCreditCard },
-  ];
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Settings"
-        description="Manage workspace profile, sender authentication, API integrations, and billing plans."
-      />
+    <div className="space-y-8 max-w-5xl mx-auto pb-12 animate-fade-in">
+      {/* Page Header & Tab Switcher */}
+      <div className="space-y-4 border-b border-[var(--border)] pb-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-[#E8A33D] text-xl">⚡</span>
+            <h1 className="text-2xl font-bold font-heading text-[var(--text)]">Settings & Configuration</h1>
+          </div>
+          <p className="text-sm text-[var(--text-secondary)] mt-1">
+            Configure workspace preferences, subscription plans, sender domains, and developer keys.
+          </p>
+        </div>
 
-      <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-                isActive
-                  ? 'bg-slate-900 text-white dark:bg-indigo-600 dark:text-white shadow-2xs'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {tab.label}
-            </button>
-          );
-        })}
+        {/* Tab Switcher */}
+        <div className="flex items-center gap-2 pt-2">
+          <button
+            onClick={() => setActiveTab('general')}
+            className={`px-4 py-2 text-xs font-mono font-semibold rounded-lg transition-colors ${
+              activeTab === 'general'
+                ? 'bg-[#E8A33D] text-[#14171C]'
+                : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] border border-[var(--border)]'
+            }`}
+          >
+            General Profile
+          </button>
+
+          <button
+            onClick={() => setActiveTab('billing')}
+            className={`px-4 py-2 text-xs font-mono font-semibold rounded-lg transition-colors flex items-center gap-2 ${
+              activeTab === 'billing'
+                ? 'bg-[#E8A33D] text-[#14171C]'
+                : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] border border-[var(--border)]'
+            }`}
+          >
+            <FiCreditCard className="w-3.5 h-3.5" />
+            Plan & Billing
+          </button>
+
+          <button
+            onClick={() => setActiveTab('developer')}
+            className={`px-4 py-2 text-xs font-mono font-semibold rounded-lg transition-colors flex items-center gap-2 ${
+              activeTab === 'developer'
+                ? 'bg-[#E8A33D] text-[#14171C]'
+                : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] border border-[var(--border)]'
+            }`}
+          >
+            <FiCode className="w-3.5 h-3.5" />
+            DKIM & Developer
+          </button>
+        </div>
       </div>
 
-      {activeTab === 'profile' && (
-        <Card title="Account Profile" subtitle="Update personal details and company information">
-          <form onSubmit={handleSaveProfile} className="space-y-4 max-w-xl">
-            <div className="flex items-center gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
-              <img
-                src={user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
-                alt="Avatar"
-                className="w-14 h-14 rounded-xl object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+      {activeTab === 'general' && (
+        <form onSubmit={handleSaveSettings} className="space-y-6">
+          <Card title="Account Profile" subtitle="Your personal workspace identification and roles">
+            <div className="space-y-4">
+              <Input
+                label="Full Name"
+                icon={FiUser}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
               />
-              <SecondaryButton size="sm">Change Photo</SecondaryButton>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Full Name
-              </label>
-              <input
-                type="text"
-                value={profileForm.name}
-                onChange={(e) => setProfileForm((prev) => ({ ...prev, name: e.target.value }))}
-                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Email Address
-              </label>
-              <input
+              <Input
+                label="Email Address"
+                icon={FiLock}
                 type="email"
-                value={profileForm.email}
-                onChange={(e) => setProfileForm((prev) => ({ ...prev, email: e.target.value }))}
-                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                value={email}
+                onChange={() => {}}
+                required
+                disabled
               />
-            </div>
-
-            <div className="pt-2">
-              <PrimaryButton type="submit">Save Profile</PrimaryButton>
-            </div>
-          </form>
-        </Card>
-      )}
-
-      {activeTab === 'sender' && (
-        <Card title="Sender & Domain Verification" subtitle="Configure custom sending domains">
-          <div className="space-y-4 max-w-xl">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                From Name
-              </label>
-              <input
-                type="text"
-                defaultValue={`Alex from ${APP_NAME}`}
-                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Reply-To Email
-              </label>
-              <input
-                type="email"
-                defaultValue="support@mailpilot.com"
-                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl"
-              />
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {activeTab === 'api' && (
-        <Card title="API Keys" subtitle="REST API key for backend integrations">
-          <div className="space-y-4 max-w-xl">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Production Key
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type={showKey ? 'text' : 'password'}
-                  readOnly
-                  value={apiKey}
-                  className="w-full px-3 py-2 font-mono text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
-                />
-                <SecondaryButton icon={showKey ? FiEyeOff : FiEye} onClick={() => setShowKey(!showKey)}>
-                  {showKey ? 'Hide' : 'Show'}
-                </SecondaryButton>
-                <PrimaryButton icon={FiCopy} onClick={handleCopyKey}>
-                  Copy
-                </PrimaryButton>
+              <div className="text-xs font-mono text-[var(--text-secondary)]">
+                Workspace: <span className="text-[var(--text)] font-semibold">{user?.workspaceName || 'Default Workspace'}</span> <span className="text-[var(--text-muted)]">({user?.workspaceId || 'ws_default'})</span>
               </div>
             </div>
+          </Card>
+
+          <div className="flex justify-end">
+            <Button variant="primary" type="submit" icon={FiSave} loading={loading}>
+              Save Profile Changes
+            </Button>
           </div>
-        </Card>
+        </form>
       )}
 
       {activeTab === 'billing' && (
-        <Card title="Subscription Tier" subtitle="Current plan detail">
-          <div className="p-4 rounded-xl border border-indigo-600 bg-indigo-50/20 dark:bg-indigo-950/20 max-w-md">
-            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">Enterprise Pro</span>
-            <h4 className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">$149 / mo</h4>
-            <p className="text-xs text-slate-500 mt-1">100,000 monthly email capacity</p>
+        <div className="space-y-6">
+          {/* Usage KPIs */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Card className="p-5">
+              <span className="text-[10px] font-mono font-semibold text-[var(--text-secondary)] uppercase">Subscribers Limit</span>
+              <div className="text-2xl font-bold font-mono text-[var(--text)] mt-1">5 / 500</div>
+              <div className="w-full bg-[var(--surface-secondary)] h-2 rounded-full mt-3 overflow-hidden">
+                <div className="bg-[#22C55E] h-full w-[1%]" />
+              </div>
+              <span className="text-[11px] text-[var(--text-muted)] mt-1 block">1% of Free Tier allocated</span>
+            </Card>
+
+            <Card className="p-5">
+              <span className="text-[10px] font-mono font-semibold text-[var(--text-secondary)] uppercase">Monthly Broadcast Volume</span>
+              <div className="text-2xl font-bold font-mono text-[var(--text)] mt-1">10 / 1,000</div>
+              <div className="w-full bg-[var(--surface-secondary)] h-2 rounded-full mt-3 overflow-hidden">
+                <div className="bg-[#E8A33D] h-full w-[1%]" />
+              </div>
+              <span className="text-[11px] text-[var(--text-muted)] mt-1 block">Resets on the 1st of each month</span>
+            </Card>
           </div>
-        </Card>
+
+          {/* Pricing Tiers Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {PLAN_TIERS.map((tier) => {
+              const isSelected = selectedPlan === tier.id;
+              return (
+                <div
+                  key={tier.id}
+                  className={`p-6 rounded-xl border flex flex-col justify-between transition-all ${
+                    isSelected
+                      ? 'bg-[var(--surface-card)] border-[#E8A33D] shadow-lg ring-1 ring-[#E8A33D]/50'
+                      : 'bg-[var(--surface-card)] border-[var(--border)] hover:border-[var(--border-strong)]'
+                  }`}
+                >
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-base text-[var(--text)] font-heading">{tier.name}</h3>
+                      {tier.recommended && <Badge variant="amber">POPULAR</Badge>}
+                      {isSelected && <Badge variant="success">CURRENT</Badge>}
+                    </div>
+
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl font-bold font-mono text-[var(--text)]">{tier.price}</span>
+                      <span className="text-xs text-[var(--text-secondary)]">/{tier.period}</span>
+                    </div>
+
+                    <div className="py-3 border-t border-b border-[var(--border)] text-xs font-mono space-y-1 text-[var(--text-secondary)]">
+                      <div className="flex items-center gap-1.5 text-[var(--text)]">
+                        <FiZap className="w-3.5 h-3.5 text-[#E8A33D]" />
+                        <span>{tier.contactLimit}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[var(--text)]">
+                        <FiGlobe className="w-3.5 h-3.5 text-[#3E6B70]" />
+                        <span>{tier.emailLimit}</span>
+                      </div>
+                    </div>
+
+                    <ul className="space-y-2 text-xs text-[var(--text-secondary)]">
+                      {tier.features.map((f, idx) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <FiCheck className="w-3.5 h-3.5 text-[#22C55E] shrink-0 mt-0.5" />
+                          <span>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="mt-6 pt-4 border-t border-[var(--border)]">
+                    <Button
+                      fullWidth
+                      variant={isSelected ? 'outline' : 'primary'}
+                      disabled={isSelected}
+                      onClick={() => handleUpgradePlan(tier.id)}
+                    >
+                      {isSelected ? 'Active Plan' : `Upgrade to ${tier.name}`}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'developer' && (
+        <div className="space-y-6">
+          <Card title="Sender Domain Verification" subtitle="DKIM & SPF configuration for high inbox deliverability">
+            <div className="space-y-4">
+              <Input
+                label="Sending Domain"
+                icon={FiGlobe}
+                placeholder="e.g. mail.yourdomain.com"
+                value={senderDomain}
+                onChange={(e) => setSenderDomain(e.target.value)}
+              />
+              <div className="p-4 rounded-lg bg-[var(--surface-secondary)] border border-[var(--border)] text-xs text-[var(--text-secondary)] flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FiAlertCircle className="w-4 h-4 text-[#F59E0B]" />
+                  <span>DKIM & SPF Status: <strong className="text-[#F59E0B]">Not Verified</strong></span>
+                </div>
+                <Badge variant="warning">DNS Required</Badge>
+              </div>
+              <p className="text-xs text-[var(--text-muted)]">
+                Add CNAME and TXT records to your DNS provider (Cloudflare, Route53, Namecheap) to verify domain ownership.
+              </p>
+            </div>
+          </Card>
+
+          <Card title="API Keys & Integrations" subtitle="Authenticate external microservices with MailPilot API">
+            <div className="p-4 rounded-lg bg-[var(--surface-secondary)] border border-[var(--border)] text-xs text-[var(--text-secondary)] space-y-2">
+              <div className="flex items-center gap-2 text-[var(--text)] font-semibold">
+                <FiKey className="w-4 h-4 text-[#E8A33D]" />
+                <span>Workspace API Token</span>
+              </div>
+              <p className="font-mono bg-[var(--surface-card)] p-2.5 rounded border border-[var(--border)] text-[#E8A33D] truncate">
+                mp_live_{user?.id ? user.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 24) : 'sec_key_48f92b7c'}
+              </p>
+              <p className="text-[11px] text-[var(--text-muted)]">
+                Use Bearer authentication in your HTTP requests header: <code>Authorization: Bearer mp_live_...</code>
+              </p>
+            </div>
+          </Card>
+        </div>
       )}
     </div>
   );

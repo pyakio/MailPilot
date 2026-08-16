@@ -1,0 +1,38 @@
+name: MailPilot CI Pipeline
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test-and-build:
+    name: Test & Build Full-Stack
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Root Dependencies
+        run: npm ci
+
+      - name: Test Server Suite
+        working-directory: ./server
+        run: |
+          npm ci
+          npx prisma generate --schema=../prisma/schema.prisma
+          npm test
+
+      - name: Build Frontend Client
+        working-directory: ./client
+        run: |
+          npm ci
+          npm run build
