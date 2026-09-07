@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FiMenu,
@@ -11,12 +11,17 @@ import {
   FiPlus,
   FiLayers,
   FiChevronDown,
+  FiBell,
+  FiCheckCircle,
+  FiInfo,
+  FiAlertTriangle,
 } from 'react-icons/fi';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
 import Avatar from '../ui/Avatar';
 import Button from '../ui/Button';
 import CommandPalette from '../components/CommandPalette';
+import { notificationService } from '../../services/notificationService';
 
 export function TopNavbar({ setMobileOpen, collapsed }) {
   const { isDark, toggleTheme } = useTheme();
@@ -24,14 +29,22 @@ export function TopNavbar({ setMobileOpen, collapsed }) {
   const navigate = useNavigate();
 
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifLoading, setNotifLoading] = useState(false);
 
   const profileRef = useRef(null);
+  const notifRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) {
         setShowProfileMenu(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setShowNotifications(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -48,6 +61,59 @@ export function TopNavbar({ setMobileOpen, collapsed }) {
     window.addEventListener('keydown', handleGlobalCmdK);
     return () => window.removeEventListener('keydown', handleGlobalCmdK);
   }, []);
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      setNotifLoading(true);
+      const res = await notificationService.getNotifications();
+      setNotifications(res?.notifications || []);
+      setUnreadCount(res?.unreadCount || 0);
+    } catch {
+      // Silently fail for notifications — non-critical
+    } finally {
+      setNotifLoading(false);
+    }
+  }, []);
+
+  // Fetch notifications on mount and poll every 60s
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 60000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
+  const handleOpenNotifications = () => {
+    setShowNotifications((v) => !v);
+    setShowProfileMenu(false);
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await notificationService.clearAll();
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      setUnreadCount(0);
+    } catch {
+      // Silently fail
+    }
+  };
+
+  const handleMarkOneRead = async (id) => {
+    try {
+      await notificationService.markAsRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+      );
+      setUnreadCount((c) => Math.max(0, c - 1));
+    } catch {
+      // Silently fail
+    }
+  };
+
+  const notifIcon = (type) => {
+    if (type === 'success') return <FiCheckCircle className="w-4 h-4 text-[#22C55E] shrink-0" />;
+    if (type === 'warning') return <FiAlertTriangle className="w-4 h-4 text-[#E8A33D] shrink-0" />;
+    return <FiInfo className="w-4 h-4 text-[#3E6B70] shrink-0" />;
+  };
 
   return (
     <>
@@ -88,9 +154,9 @@ export function TopNavbar({ setMobileOpen, collapsed }) {
             </kbd>
           </div>
 
-          {/* Right Side Actions: Theme Toggle, Profile & New Campaign Button */}
+          {/* Right Side Actions */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Quick Theme Switcher Button */}
+            {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
               className="p-2 rounded-[8px] text-[var(--text-secondary)] hover:text-[#E8A33D] hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
@@ -104,10 +170,68 @@ export function TopNavbar({ setMobileOpen, collapsed }) {
               )}
             </button>
 
+            {/* Notification Bell */}
+            <div className="relative" ref={notifRef}>
+              <button
+                onClick={handleOpenNotifications}
+                className="relative p-2 rounded-[8px] text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
+                aria-label="Notifications"
+              >
+                <FiBell className="w-4 h-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] bg-[#E8A33D] text-[#0D0F11] text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 bg-[var(--surface-card)] border border-[var(--border)] rounded-[14px] shadow-2xl z-50 animate-fade-in overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+                    <span className="text-[13px] font-semibold text-[var(--text)]">Notifications</span>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={handleMarkAllRead}
+                        className="text-[11px] text-[#E8A33D] hover:underline font-medium"
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-[320px] overflow-y-auto">
+                    {notifLoading ? (
+                      <p className="py-6 text-center text-[12px] text-[var(--text-muted)]">Loading...</p>
+                    ) : notifications.length === 0 ? (
+                      <p className="py-8 text-center text-[12px] text-[var(--text-muted)]">No notifications yet.</p>
+                    ) : (
+                      notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          onClick={() => !n.read && handleMarkOneRead(n.id)}
+                          className={`flex items-start gap-3 px-4 py-3 border-b border-[var(--border)] last:border-0 cursor-pointer transition-colors ${
+                            n.read ? 'opacity-60' : 'hover:bg-[var(--surface-hover)]'
+                          }`}
+                        >
+                          {notifIcon(n.type)}
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[12px] font-medium text-[var(--text)] truncate">{n.title}</p>
+                            <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 line-clamp-2">{n.message}</p>
+                          </div>
+                          {!n.read && (
+                            <span className="w-2 h-2 rounded-full bg-[#E8A33D] shrink-0 mt-1" />
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Profile Menu Dropdown */}
             <div className="relative" ref={profileRef}>
               <button
-                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                onClick={() => { setShowProfileMenu(!showProfileMenu); setShowNotifications(false); }}
                 className="flex items-center gap-2 p-1.5 rounded-[10px] hover:bg-[var(--surface-hover)] transition-colors min-h-[40px]"
               >
                 <Avatar

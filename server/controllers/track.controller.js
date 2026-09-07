@@ -96,88 +96,110 @@ async function trackOpen(req, res) {
 
 /**
  * GET /api/track/click/:token?url=...
- * Records link click and redirects recipient to original destination
+ * Records link click and redirects recipient to original destination after verifying token
  */
 async function trackClick(req, res) {
   const { token } = req.params;
   const targetUrl = req.query.url;
 
-  // Validate URL to prevent open redirect vulnerabilities
-  let destination = 'https://mailpilot.io';
-  if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
-    destination = targetUrl;
+  // 1. Verify tracking token signature and extract metadata
+  const decoded = verifyTrackingToken(token);
+  if (!decoded) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid or expired tracking token.',
+    });
   }
 
-  // Redirect recipient immediately
-  res.redirect(302, destination);
+  // 2. Validate destination URL (must be valid absolute HTTP/HTTPS URL)
+  if (!targetUrl || typeof targetUrl !== 'string') {
+    return res.status(400).json({
+      success: false,
+      error: 'Target URL parameter is required.',
+    });
+  }
 
-  if (!getConnectionStatus() || !prisma || !prisma.emailEvent) return;
-
-  const decoded = verifyTrackingToken(token);
-  if (!decoded) return;
-
-  const { campaignId, contactId, workspaceId } = decoded;
-
-
+  let parsedUrl;
   try {
-    // Record click event in database
-    await prisma.emailEvent.create({
-      data: {
-        workspaceId,
-        campaignId,
-        contactId,
-        eventType: 'CLICKED',
-        metadata: {
-          url: destination,
-          ip: req.ip || req.headers['x-forwarded-for'],
-          userAgent: req.headers['user-agent'],
-        },
-      },
-    });
-
-    // Check unique click
-    const previousClicks = await prisma.emailEvent.count({
-      where: {
-        campaignId,
-        contactId,
-        eventType: 'CLICKED',
-      },
-    });
-
-    if (previousClicks <= 1) {
-      const campaign = await prisma.campaign.findUnique({
-        where: { id: campaignId },
-        select: { stats: true },
+    parsedUrl = new URL(targetUrl);
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid destination URL protocol.',
       });
-
-      if (campaign) {
-        const stats = typeof campaign.stats === 'object' && campaign.stats ? { ...campaign.stats } : {};
-        stats.clicked = (stats.clicked || 0) + 1;
-
-        await prisma.campaign.update({
-          where: { id: campaignId },
-          data: { stats },
-        });
-      }
-
-      const contact = await prisma.contact.findUnique({
-        where: { id: contactId },
-        select: { engagement: true },
-      });
-
-      if (contact) {
-        const engagement = typeof contact.engagement === 'object' && contact.engagement ? { ...contact.engagement } : {};
-        engagement.clicks = (engagement.clicks || 0) + 1;
-
-        await prisma.contact.update({
-          where: { id: contactId },
-          data: { engagement },
-        });
-      }
     }
   } catch (err) {
-    console.error('❌ [Tracking] Error recording click event:', err.message);
+    return res.status(400).json({
+      success: false,
+      error: 'Malformed destination URL.',
+    });
   }
+
+  const destination = parsedUrl.href;
+  const { campaignId, contactId, workspaceId } = decoded;
+
+  // 3. Asynchronously record click event in database
+  if (getConnectionStatus() && prisma && prisma.emailEvent) {
+    try {
+      // Count existing clicks BEFORE inserting to detect first unique click
+      const previousClicks = await prisma.emailEvent.count({
+        where: { campaignId, contactId, eventType: 'CLICKED' },
+      });
+
+      // Record click event in database
+      await prisma.emailEvent.create({
+        data: {
+          workspaceId,
+          campaignId,
+          contactId,
+          eventType: 'CLICKED',
+          metadata: {
+            url: destination,
+            ip: req.ip || req.headers['x-forwarded-for'],
+            userAgent: req.headers['user-agent'],
+          },
+        },
+      });
+
+      // Increment stats only on first unique click
+      if (previousClicks === 0) {
+        const campaign = await prisma.campaign.findUnique({
+          where: { id: campaignId },
+          select: { stats: true },
+        });
+
+        if (campaign) {
+          const stats = typeof campaign.stats === 'object' && campaign.stats ? { ...campaign.stats } : {};
+          stats.clicked = (stats.clicked || 0) + 1;
+
+          await prisma.campaign.update({
+            where: { id: campaignId },
+            data: { stats },
+          });
+        }
+
+        const contact = await prisma.contact.findUnique({
+          where: { id: contactId },
+          select: { engagement: true },
+        });
+
+        if (contact) {
+          const engagement = typeof contact.engagement === 'object' && contact.engagement ? { ...contact.engagement } : {};
+          engagement.clicks = (engagement.clicks || 0) + 1;
+
+          await prisma.contact.update({
+            where: { id: contactId },
+            data: { engagement },
+          });
+        }
+      }
+    } catch (err) {
+      console.error('❌ [Tracking] Error recording click event:', err.message);
+    }
+  }
+
+  // 4. Safely redirect to validated destination
+  return res.redirect(302, destination);
 }
 
 module.exports = { trackOpen, trackClick };

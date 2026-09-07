@@ -17,7 +17,6 @@ function errorMiddleware(err, req, res, next) {
   res.status(statusCode).json({
     success: false,
     error: message,
-    message: message,
     ...(NODE_ENV === 'development' && { stack: err.stack }),
   });
 }

@@ -61,7 +61,7 @@ export function ContactFormModal({ isOpen, onClose, onSubmit, initialData = null
           onChange={(e) => setTagsInput(e.target.value)}
         />
 
-        <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-[rgba(255,255,255,0.05)]">
+        <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-[var(--border)]">
           <Button variant="outline" size="sm" onClick={onClose} disabled={loading}>
             Cancel
           </Button>

@@ -18,6 +18,11 @@ module.exports = {
   DATABASE_URL: process.env.DATABASE_URL || '',
   DIRECT_URL: process.env.DIRECT_URL || '',
 
+  // Supabase Project (REST API, Auth, Storage)
+  SUPABASE_URL: process.env.SUPABASE_URL || '',
+  SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || '',
+  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+
   // JWT authentication
   JWT_SECRET,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
@@ -51,7 +56,12 @@ module.exports = {
   // Tracking & Security
   TRACKING_SECRET: process.env.TRACKING_SECRET || JWT_SECRET,
 
+  // Resend Webhook Signing Secret (from Resend Dashboard → Webhooks)
+  // Required to verify incoming bounce/complaint webhook payloads
+  RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET || '',
+
   // AI Assistant (OpenAI / Gemini)
+  AI_PROVIDER: process.env.AI_PROVIDER || 'openai',
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
   GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
 

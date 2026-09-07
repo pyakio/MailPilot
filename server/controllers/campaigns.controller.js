@@ -1,16 +1,8 @@
-const { getConnectionStatus, prisma } = require('../config/db');
+const { ensureDbConnected, prisma } = require('../config/db');
 const { ApiError } = require('../middlewares/error.middleware');
 const { getUserWorkspaceId } = require('../services/workspace.service');
 const emailService = require('../services/email.service');
 
-function ensureDbConnected() {
-  if (!getConnectionStatus()) {
-    throw new ApiError(
-      503,
-      'Database connection unavailable. Please ensure DATABASE_URL is configured in server/.env.'
-    );
-  }
-}
 
 /**
  * GET /api/campaigns

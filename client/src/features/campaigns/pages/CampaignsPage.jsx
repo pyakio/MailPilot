@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import Card from '../../../shared/ui/Card';
 import Button from '../../../shared/ui/Button';
 import Input from '../../../shared/ui/Input';
@@ -25,6 +26,7 @@ import {
 
 export function CampaignsPage() {
   const { addToast } = useToast();
+  const location = useLocation();
   const [campaigns, setCampaigns] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -56,6 +58,19 @@ export function CampaignsPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Auto-open campaign creator if navigated from TemplatesPage with template payload
+  useEffect(() => {
+    if (location.state?.selectedTemplateId || location.state?.templateHtml) {
+      setEditingCampaign({
+        name: location.state.templateSubject ? `Broadcast: ${location.state.templateSubject.slice(0, 30)}` : 'New Campaign',
+        subject: location.state.templateSubject || '',
+        content: location.state.templateHtml || location.state.templateBody || '',
+        templateId: location.state.selectedTemplateId || '',
+      });
+      setIsModalOpen(true);
+    }
+  }, [location.state]);
 
   const filteredCampaigns = campaigns.filter((c) => {
     const matchesSearch =
@@ -120,6 +135,10 @@ export function CampaignsPage() {
         return <Badge variant="success">Sent</Badge>;
       case 'scheduled':
         return <Badge variant="warning">Scheduled</Badge>;
+      case 'sending':
+        return <Badge variant="steel">Sending...</Badge>;
+      case 'failed':
+        return <Badge variant="danger">Failed</Badge>;
       case 'draft':
       default:
         return <Badge variant="default">Draft</Badge>;

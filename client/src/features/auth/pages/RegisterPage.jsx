@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { useToast } from '../../../hooks/useToast';
 import { FiMail, FiLock, FiUser, FiArrowRight, FiEye, FiEyeOff, FiLoader, FiAlertCircle } from 'react-icons/fi';
 import { APP_NAME } from '../../../constants';
 import GoogleAuthModal from '../../../shared/components/auth/GoogleAuthModal';
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 export function RegisterPage() {
   const navigate = useNavigate();
@@ -20,6 +22,67 @@ export function RegisterPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) return;
+
+    const initGoogleAuth = () => {
+      try {
+        if (!window.google?.accounts?.id) return;
+
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleGoogleCredential,
+          auto_select: false,
+          cancel_on_tap_outside: true,
+        });
+
+        const btnContainer = document.getElementById('google-register-btn');
+        if (btnContainer) {
+          window.google.accounts.id.renderButton(btnContainer, {
+            theme: 'filled_black',
+            size: 'large',
+            width: btnContainer.offsetWidth || 356,
+            text: 'signup_with',
+            shape: 'rectangular',
+            logo_alignment: 'left',
+          });
+        }
+
+        window.google.accounts.id.prompt();
+      } catch (err) {
+        console.warn('GIS register initialization info:', err.message);
+      }
+    };
+
+    if (window.google?.accounts?.id) {
+      initGoogleAuth();
+    } else {
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload = initGoogleAuth;
+      document.head.appendChild(script);
+    }
+  }, []);
+
+  const handleGoogleCredential = async (response) => {
+    if (!response?.credential) return;
+    try {
+      setGoogleLoading(true);
+      setErrorMsg('');
+      await loginWithGoogle(response.credential);
+      addToast({ title: 'Welcome to MailPilot', message: 'Workspace created with Google.', type: 'success' });
+      navigate('/');
+    } catch (err) {
+      const msg = err.message || 'Google registration failed.';
+      setErrorMsg(msg);
+      addToast({ title: 'Google Sign In Failed', message: msg, type: 'error' });
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const passwordStrength = (() => {
     if (password.length === 0) return null;
@@ -162,29 +225,35 @@ export function RegisterPage() {
           )}
 
           {/* Google Sign Up */}
-          <button
-            type="button"
-            onClick={() => setIsGoogleModalOpen(true)}
-            disabled={googleLoading || loading}
-            className="w-full h-[44px] flex items-center justify-center gap-3 bg-[#16191F] hover:bg-[#20242D] border border-[rgba(255,255,255,0.08)] rounded-lg text-xs font-medium text-[#F4F5F7] active:scale-[0.99] transition-all"
-          >
-            {googleLoading ? (
-              <>
-                <FiLoader className="w-4 h-4 animate-spin text-[#E8A33D]" />
-                <span>Creating workspace with Google...</span>
-              </>
+          <div className="space-y-3">
+            {GOOGLE_CLIENT_ID ? (
+              <div id="google-register-btn" className="w-full min-h-[44px]" />
             ) : (
-              <>
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                </svg>
-                Sign up with Google
-              </>
+              <button
+                type="button"
+                onClick={() => setIsGoogleModalOpen(true)}
+                disabled={googleLoading || loading}
+                className="w-full h-[44px] flex items-center justify-center gap-3 bg-[#16191F] hover:bg-[#20242D] border border-[rgba(255,255,255,0.08)] rounded-lg text-xs font-medium text-[#F4F5F7] active:scale-[0.99] transition-all cursor-pointer"
+              >
+                {googleLoading ? (
+                  <>
+                    <FiLoader className="w-4 h-4 animate-spin text-[#E8A33D]" />
+                    <span>Creating workspace with Google...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    </svg>
+                    Sign up with Google
+                  </>
+                )}
+              </button>
             )}
-          </button>
+          </div>
 
           {/* Divider */}
           <div className="flex items-center gap-4">

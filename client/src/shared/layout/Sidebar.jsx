@@ -1,7 +1,8 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   FiGrid,
+  FiInbox,
   FiSend,
   FiFileText,
   FiUsers,
@@ -18,12 +19,36 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { APP_NAME } from '../../constants';
+import { inboxService } from '../../services/inboxService';
 import Avatar from '../ui/Avatar';
 
 export function Sidebar({ mobileOpen, setMobileOpen, collapsed, setCollapsed }) {
   const { user, logout } = useAuth();
   const { addToast } = useToast();
   const navigate = useNavigate();
+  const [inboxUnread, setInboxUnread] = React.useState(0);
+
+  // Poll inbox unread count
+  React.useEffect(() => {
+    let isMounted = true;
+    const fetchStats = async () => {
+      try {
+        const res = await inboxService.getInboxStats();
+        if (isMounted && res?.stats?.inboxUnread !== undefined) {
+          setInboxUnread(res.stats.inboxUnread);
+        }
+      } catch (err) {
+        // Silently skip if polling fails
+      }
+    };
+
+    fetchStats();
+    const interval = setInterval(fetchStats, 30000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Save collapsed state memory
   const handleToggleCollapse = () => {
@@ -41,6 +66,7 @@ export function Sidebar({ mobileOpen, setMobileOpen, collapsed, setCollapsed }) 
       group: 'WORKSPACE',
       items: [
         { name: 'Overview', path: '/', icon: FiGrid, hint: 'G O' },
+        { name: 'Inbox', path: '/inbox', icon: FiInbox, hint: 'G I', badge: inboxUnread },
         { name: 'Campaigns', path: '/campaigns', icon: FiSend, hint: 'G C' },
         { name: 'Audience', path: '/contacts', icon: FiUsers, hint: 'G A' },
       ],
@@ -148,11 +174,18 @@ export function Sidebar({ mobileOpen, setMobileOpen, collapsed, setCollapsed }) 
                         />
                         {!collapsed && <span className="truncate">{item.name}</span>}
                       </div>
-                      {!collapsed && item.hint && (
-                        <kbd className="hidden group-hover:inline-block text-[9px] font-mono text-[var(--text-muted)] bg-[var(--surface-secondary)] px-1 rounded border border-[var(--border)]">
-                          {item.hint}
-                        </kbd>
-                      )}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {item.badge > 0 && !collapsed && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-[#E8A33D] text-[#14171C] rounded-full leading-none">
+                            {item.badge > 99 ? '99+' : item.badge}
+                          </span>
+                        )}
+                        {!collapsed && item.hint && (
+                          <kbd className="hidden group-hover:inline-block text-[9px] font-mono text-[var(--text-muted)] bg-[var(--surface-secondary)] px-1 rounded border border-[var(--border)]">
+                            {item.hint}
+                          </kbd>
+                        )}
+                      </div>
                     </>
                   )}
                 </NavLink>

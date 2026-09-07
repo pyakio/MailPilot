@@ -47,24 +47,35 @@ export function LoginPage() {
     if (!GOOGLE_CLIENT_ID) return;
     loadGoogleScript(GOOGLE_CLIENT_ID, () => {
       try {
-        window.google?.accounts.id.initialize({
+        if (!window.google?.accounts?.id) return;
+
+        window.google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
           callback: handleGoogleCredential,
           auto_select: false,
           cancel_on_tap_outside: true,
         });
 
-        const btnContainer = document.getElementById('google-signin-btn-container');
-        if (btnContainer && window.google?.accounts?.id?.renderButton) {
+        const btnContainer = document.getElementById('google-signin-btn');
+        if (btnContainer) {
           window.google.accounts.id.renderButton(btnContainer, {
-            theme: 'outline',
+            theme: 'filled_black',
             size: 'large',
-            width: btnContainer.offsetWidth || 340,
+            width: btnContainer.offsetWidth || 356,
             text: 'continue_with',
+            shape: 'rectangular',
+            logo_alignment: 'left',
           });
         }
-      } catch {
-        // Graceful Google OAuth initialization fallback
+
+        // Prompt Google One Tap
+        window.google.accounts.id.prompt((notification) => {
+          if (notification.isNotDisplayed()) {
+            // One Tap not displayed (cool-down, browser privacy policy, etc.)
+          }
+        });
+      } catch (err) {
+        console.warn('Google Identity Services initialization info:', err.message);
       }
     });
   }, []);

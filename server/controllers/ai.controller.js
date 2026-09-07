@@ -41,4 +41,23 @@ async function checkSpamRisk(req, res, next) {
   }
 }
 
-module.exports = { getSubjectLines, getEmailCopy, checkSpamRisk };
+async function assistantChat(req, res, next) {
+  try {
+    const { messages, provider } = req.body;
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'messages array is required' });
+    }
+    const reply = await aiService.askAI({ messages, provider });
+    res.json({ success: true, reply });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = {
+  getSubjectLines,
+  getEmailCopy,
+  checkSpamRisk,
+  assistantChat,
+};
+

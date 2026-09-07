@@ -4,6 +4,7 @@
 
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../config/env');
+const { isRevoked } = require('../services/tokenBlocklist.service');
 
 function authMiddleware(req, res, next) {
   try {
@@ -18,17 +19,23 @@ function authMiddleware(req, res, next) {
     }
 
     if (!token) {
-      return res.status(401).json({ error: 'Authentication required. Please sign in.' });
+      return res.status(401).json({ success: false, error: 'Authentication required. Please sign in.' });
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
+
+    // Check blocklist — rejects tokens that were explicitly revoked on logout
+    if (isRevoked(decoded.jti)) {
+      return res.status(401).json({ success: false, error: 'Session has been revoked. Please sign in again.' });
+    }
+
     req.user = decoded;
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
-      return res.status(401).json({ error: 'Session expired. Please sign in again.' });
+      return res.status(401).json({ success: false, error: 'Session expired. Please sign in again.' });
     }
-    return res.status(401).json({ error: 'Invalid authentication token.' });
+    return res.status(401).json({ success: false, error: 'Invalid authentication token.' });
   }
 }
 
@@ -43,7 +50,10 @@ function optionalAuth(req, res, next) {
       token = req.cookies.mailpilot_token;
     }
     if (token) {
-      req.user = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, JWT_SECRET);
+      if (!isRevoked(decoded.jti)) {
+        req.user = decoded;
+      }
     }
   } catch (_) {
     // Token invalid or missing — req.user remains undefined
@@ -53,7 +63,9 @@ function optionalAuth(req, res, next) {
 
 /**
  * Role-Based Access Control Middleware
- * Verifies that the authenticated user holds an allowed role in their active workspace
+ * Verifies that the authenticated user holds an allowed role in their active workspace.
+ * Active workspace is resolved from the x-workspace-id header, or defaults to the
+ * user's first (and usually only) workspace membership.
  */
 function requireRole(allowedRoles = ['ADMIN', 'EDITOR']) {
   return async (req, res, next) => {
@@ -63,14 +75,26 @@ function requireRole(allowedRoles = ['ADMIN', 'EDITOR']) {
       }
 
       const { prisma } = require('../config/db');
+
+      // Resolve active workspaceId: prefer explicit header, otherwise use first membership
+      const requestedWorkspaceId = req.headers['x-workspace-id'];
+
+      const whereClause = requestedWorkspaceId
+        ? { userId: req.user.id, workspaceId: requestedWorkspaceId }
+        : { userId: req.user.id };
+
       const membership = await prisma.workspaceMembership.findFirst({
-        where: {
-          userId: req.user.id,
-        },
+        where: whereClause,
       });
 
-      // Default role to ADMIN if bootstrap user
-      const role = membership?.role || 'ADMIN';
+      if (!membership) {
+        return res.status(403).json({
+          success: false,
+          error: 'No workspace membership found. Access denied.',
+        });
+      }
+
+      const role = membership.role || 'VIEWER';
 
       if (!allowedRoles.includes(role)) {
         return res.status(403).json({
@@ -80,6 +104,7 @@ function requireRole(allowedRoles = ['ADMIN', 'EDITOR']) {
       }
 
       req.userRole = role;
+      req.activeWorkspaceId = membership.workspaceId;
       next();
     } catch (err) {
       return res.status(500).json({ success: false, error: 'Authorization verification failed.' });
@@ -88,4 +113,5 @@ function requireRole(allowedRoles = ['ADMIN', 'EDITOR']) {
 }
 
 module.exports = { authMiddleware, optionalAuth, requireRole };
+
 

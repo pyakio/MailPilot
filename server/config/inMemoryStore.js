@@ -33,6 +33,10 @@ class InMemoryStore {
 
     this.accounts = [];
     this.sessions = [];
+    this.threads = [];
+    this.emails = [];
+    this.emailDrafts = [];
+    this.aiSummaries = [];
 
     this.workspaces = [
       {
@@ -727,6 +731,22 @@ class InMemoryStore {
     return this._createModelHandler(this.subscriptions, 'subscription');
   }
 
+  get thread() {
+    return this._createModelHandler(this.threads, 'thread');
+  }
+
+  get email() {
+    return this._createModelHandler(this.emails, 'email');
+  }
+
+  get emailDraft() {
+    return this._createModelHandler(this.emailDrafts, 'emailDraft');
+  }
+
+  get aiSummary() {
+    return this._createModelHandler(this.aiSummaries, 'aiSummary');
+  }
+
   _matchesWhere(item, where) {
     if (!where) return true;
 
@@ -739,6 +759,14 @@ class InMemoryStore {
         if (!condition.some((subWhere) => this._matchesWhere(item, subWhere))) return false;
         continue;
       }
+      if (key === 'NOT') {
+        if (Array.isArray(condition)) {
+          if (condition.some((subWhere) => this._matchesWhere(item, subWhere))) return false;
+        } else if (typeof condition === 'object') {
+          if (this._matchesWhere(item, condition)) return false;
+        }
+        continue;
+      }
 
       // Handle compound unique keys like workspaceId_email or provider_providerAccountId
       if (key === 'workspaceId_email' && typeof condition === 'object') {
@@ -749,6 +777,14 @@ class InMemoryStore {
       }
       if (key === 'provider_providerAccountId' && typeof condition === 'object') {
         if (item.provider !== condition.provider || item.providerAccountId !== condition.providerAccountId) return false;
+        continue;
+      }
+      if (key === 'userId_gmailThreadId' && typeof condition === 'object') {
+        if (item.userId !== condition.userId || item.gmailThreadId !== condition.gmailThreadId) return false;
+        continue;
+      }
+      if (key === 'userId_gmailId' && typeof condition === 'object') {
+        if (item.userId !== condition.userId || item.gmailId !== condition.gmailId) return false;
         continue;
       }
 
@@ -770,6 +806,20 @@ class InMemoryStore {
         if (condition.equals !== undefined && val !== condition.equals) return false;
         if (condition.not !== undefined && val === condition.not) return false;
         if (condition.in && Array.isArray(condition.in) && !condition.in.includes(val)) return false;
+        if (condition.has !== undefined) {
+          if (!Array.isArray(val) || !val.includes(condition.has)) return false;
+        }
+        if (condition.hasSome && Array.isArray(condition.hasSome)) {
+          if (!Array.isArray(val) || !condition.hasSome.some((v) => val.includes(v))) return false;
+        }
+        if (condition.contains !== undefined) {
+          if (typeof val !== 'string') return false;
+          if (condition.mode === 'insensitive') {
+            if (!val.toLowerCase().includes(String(condition.contains).toLowerCase())) return false;
+          } else {
+            if (!val.includes(String(condition.contains))) return false;
+          }
+        }
       } else {
         if (val !== condition) return false;
       }
@@ -794,6 +844,20 @@ class InMemoryStore {
     }
     if (include.memberships && modelName === 'workspace') {
       result.memberships = this.workspaceMemberships.filter((m) => m.workspaceId === item.id);
+    }
+    if (include.emails && modelName === 'thread') {
+      result.emails = this.emails
+        .filter((e) => e.threadId === item.id)
+        .sort((a, b) => new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt));
+    }
+    if (include.drafts && modelName === 'thread') {
+      result.drafts = this.emailDrafts.filter((d) => d.threadId === item.id);
+    }
+    if (include.aiSummary && modelName === 'thread') {
+      result.aiSummary = this.aiSummaries.find((s) => s.threadId === item.id) || null;
+    }
+    if (include.thread && item.threadId) {
+      result.thread = this.threads.find((t) => t.id === item.threadId) || null;
     }
     return result;
   }
@@ -846,6 +910,10 @@ class InMemoryStore {
             if (order === 'desc') return (valB > valA ? 1 : -1);
             return (valA > valB ? 1 : -1);
           });
+        }
+
+        if (args.skip) {
+          items = items.slice(args.skip);
         }
 
         if (args.take) {

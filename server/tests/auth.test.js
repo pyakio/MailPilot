@@ -86,3 +86,45 @@ test('POST /api/auth/logout clears session', async () => {
   assert.equal(res.status, 200);
   assert.equal(res.body.success, true);
 });
+
+test('POST /api/auth/google rejects missing credential token', async () => {
+  const res = await request(app)
+    .post('/api/auth/google')
+    .send({});
+
+  assert.equal(res.status, 400);
+  assert.equal(res.body.success, false);
+});
+
+test('POST /api/auth/google creates new user, workspace, and session for first-time Google sign-in', async () => {
+  const email = `google_pilot_${Date.now()}@gmail.com`;
+  const res = await request(app)
+    .post('/api/auth/google')
+    .send({
+      credential: `demo_${email}:::Google Pilot`,
+    });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(res.body.user.email, email);
+  assert.ok(res.body.user.workspaceId);
+  assert.ok(res.body.token);
+  assert.ok(res.headers['set-cookie']);
+});
+
+test('POST /api/auth/google authenticates returning Google user without creating duplicate accounts', async () => {
+  const email = `google_returning_${Date.now()}@gmail.com`;
+  const cred = `demo_${email}:::Returning Pilot`;
+
+  const firstRes = await request(app)
+    .post('/api/auth/google')
+    .send({ credential: cred });
+  assert.equal(firstRes.status, 200);
+  const firstUserId = firstRes.body.user.id;
+
+  const secondRes = await request(app)
+    .post('/api/auth/google')
+    .send({ credential: cred });
+  assert.equal(secondRes.status, 200);
+  assert.equal(secondRes.body.user.id, firstUserId);
+});

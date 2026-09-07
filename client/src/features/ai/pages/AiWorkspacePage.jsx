@@ -5,6 +5,7 @@ import Input from '../../../shared/ui/Input';
 import Badge from '../../../shared/ui/Badge';
 import { aiService } from '../../../services/aiService';
 import { useToast } from '../../../hooks/useToast';
+import AssistantPanel from '../components/AssistantPanel';
 import {
   FiZap,
   FiSend,
@@ -14,11 +15,12 @@ import {
   FiCpu,
   FiCheckCircle,
   FiAlertTriangle,
+  FiMessageSquare,
 } from 'react-icons/fi';
 
 export function AiWorkspacePage() {
   const { addToast } = useToast();
-  const [activeTab, setActiveTab] = useState('subject'); // 'subject' | 'copy' | 'spam'
+  const [activeTab, setActiveTab] = useState('assistant'); // 'assistant' | 'subject' | 'copy' | 'spam'
 
   // Tab 1: Subject Line Optimizer State
   const [subjectTopic, setSubjectTopic] = useState('');
@@ -51,7 +53,7 @@ export function AiWorkspacePage() {
 
     try {
       setSubjectLoading(true);
-      const res = await aiService.generateSubjectLines(subjectTopic, subjectAudience, subjectTone);
+      const res = await aiService.getSubjectLines({ topic: subjectTopic, audience: subjectAudience, tone: subjectTone });
       setSubjectResults(res.variations || []);
       addToast({ title: 'Generated', message: 'Generated 5 high-converting subject variations.', type: 'success' });
     } catch (err) {
@@ -70,7 +72,7 @@ export function AiWorkspacePage() {
 
     try {
       setCopyLoading(true);
-      const res = await aiService.generateEmailCopy(copyTopic, copyGoal, copyAudience);
+      const res = await aiService.getEmailCopy({ topic: copyTopic, goal: copyGoal, audience: copyAudience });
       setCopyResult(res.copy || null);
       addToast({ title: 'Draft Generated', message: 'Complete email draft ready in preview.', type: 'success' });
     } catch (err) {
@@ -89,7 +91,7 @@ export function AiWorkspacePage() {
 
     try {
       setSpamLoading(true);
-      const res = await aiService.analyzeSpam(spamSubject, spamContent);
+      const res = await aiService.checkSpamRisk({ subject: spamSubject, content: spamContent });
       setSpamAnalysis(res.analysis || null);
       addToast({ title: 'Audit Completed', message: 'Deliverability and spam scoring complete.', type: 'success' });
     } catch (err) {
@@ -127,7 +129,18 @@ export function AiWorkspacePage() {
         </div>
 
         {/* Tab Controls */}
-        <div className="flex items-center gap-1 bg-[var(--surface-secondary)] p-1 rounded-lg border border-[var(--border)]">
+        <div className="flex items-center gap-1 bg-[var(--surface-secondary)] p-1 rounded-lg border border-[var(--border)] overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('assistant')}
+            className={`px-3 py-1.5 rounded-md text-xs font-mono font-medium transition-colors flex items-center gap-1.5 ${
+              activeTab === 'assistant'
+                ? 'bg-[#E8A33D] text-[#14171C] font-semibold shadow-xs'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)]'
+            }`}
+          >
+            <FiMessageSquare className="w-3.5 h-3.5" />
+            AI Copilot Chat
+          </button>
           <button
             onClick={() => setActiveTab('subject')}
             className={`px-3 py-1.5 rounded-md text-xs font-mono font-medium transition-colors ${
@@ -160,6 +173,13 @@ export function AiWorkspacePage() {
           </button>
         </div>
       </div>
+
+      {/* ─── TAB 0: AI COPILOT CHAT ────────────────────────────────────────── */}
+      {activeTab === 'assistant' && (
+        <div className="w-full">
+          <AssistantPanel />
+        </div>
+      )}
 
       {/* ─── TAB 1: SUBJECT LINE GENERATOR ──────────────────────────────────── */}
       {activeTab === 'subject' && (

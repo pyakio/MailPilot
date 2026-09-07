@@ -17,13 +17,19 @@ const notificationRoutes = require('./routes/notifications.routes');
 const trackRoutes = require('./routes/track.routes');
 const unsubscribeRoutes = require('./routes/unsubscribe.routes');
 const aiRoutes = require('./routes/ai.routes');
+const inboxRoutes = require('./routes/inbox.routes');
 
-// Middleware
+const { authMiddleware } = require('./middlewares/auth.middleware');
+const { getSummary } = require('./controllers/campaigns.controller');
 const { errorMiddleware } = require('./middlewares/error.middleware');
+const { globalApiLimiter } = require('./middlewares/rateLimiter.middleware');
 
 const app = express();
 
 // ─── Security & Core Middleware ─────────────────────────────────────────────
+// Apply global API rate limit before any route resolves
+app.use('/api', globalApiLimiter);
+
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allows tracking pixel loading across mail clients
 }));
@@ -38,6 +44,7 @@ app.use(cookieParser());
 
 // ─── API Routes ─────────────────────────────────────────────────────────────
 app.use('/api', authRoutes);                          // /api/auth/*, /api/status
+app.use('/api/inbox', inboxRoutes);                    // /api/inbox/*
 app.use('/api/campaigns', campaignRoutes);            // /api/campaigns/*
 app.use('/api/contacts', contactRoutes);              // /api/contacts/*
 app.use('/api/templates', templateRoutes);            // /api/templates/*
@@ -48,7 +55,7 @@ app.use('/api/unsubscribe', unsubscribeRoutes);        // /api/unsubscribe/:toke
 app.use('/api/ai', aiRoutes);                          // /api/ai/*
 
 // Keep /api/summary as an alias for dashboard compatibility
-app.get('/api/summary', require('./middlewares/auth.middleware').authMiddleware, require('./controllers/campaigns.controller').getSummary);
+app.get('/api/summary', authMiddleware, getSummary);
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 app.use((req, res) => {
@@ -59,4 +66,3 @@ app.use((req, res) => {
 app.use(errorMiddleware);
 
 module.exports = app;
-

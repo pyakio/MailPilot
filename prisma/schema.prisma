@@ -66,6 +66,9 @@ model User {
   sessions            Session[]
   memberships         WorkspaceMembership[]
   passwordResetTokens PasswordResetToken[]
+  threads             Thread[]
+  emails              Email[]
+  drafts              EmailDraft[]
 
   @@map("users")
 }
@@ -188,6 +191,7 @@ model Template {
   subject     String?
   body        String    @db.Text
   htmlBody    String?   @db.Text
+  thumbnail   String?
   category    String    @default("custom")
   usageCount  Int       @default(0)
   createdAt   DateTime  @default(now())
@@ -260,6 +264,109 @@ model Subscription {
   workspace            Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("subscriptions")
+}
+
+model Thread {
+  id             String       @id @default(cuid())
+  userId         String
+  gmailThreadId  String
+  historyId      String?
+  subject        String       @default("(No Subject)")
+  snippet        String?      @db.Text
+  messageCount   Int          @default(1)
+  unreadCount    Int          @default(0)
+  hasAttachments Boolean      @default(false)
+  isStarred      Boolean      @default(false)
+  labels         String[]     @default([])
+  lastMessageAt  DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emails         Email[]
+  drafts         EmailDraft[]
+  aiSummary      AiSummary?
+
+  @@unique([userId, gmailThreadId])
+  @@index([userId])
+  @@index([userId, lastMessageAt(sort: Desc)])
+  @@map("threads")
+}
+
+model Email {
+  id             String      @id @default(cuid())
+  userId         String
+  threadId       String?
+  gmailId        String
+  gmailThreadId  String?
+  from           String
+  fromName       String?
+  to             String[]    @default([])
+  cc             String[]    @default([])
+  bcc            String[]    @default([])
+  replyTo        String?
+  subject        String      @default("(No Subject)")
+  snippet        String?     @db.Text
+  bodyText       String?     @db.Text
+  bodyHtml       String?     @db.Text
+  date           DateTime    @default(now())
+  isRead         Boolean     @default(false)
+  isStarred      Boolean     @default(false)
+  isSent         Boolean     @default(false)
+  isDraft        Boolean     @default(false)
+  labels         String[]    @default([])
+  headers        Json?
+  attachments    Json?       @default("[]")
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  thread         Thread?     @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gmailId])
+  @@index([userId])
+  @@index([threadId])
+  @@index([userId, date(sort: Desc)])
+  @@index([userId, isRead])
+  @@map("emails")
+}
+
+model EmailDraft {
+  id           String    @id @default(cuid())
+  userId       String
+  threadId     String?
+  gmailDraftId String?
+  to           String[]  @default([])
+  cc           String[]  @default([])
+  bcc          String[]  @default([])
+  subject      String    @default("")
+  body         String    @default("") @db.Text
+  inReplyTo    String?
+  references   String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  thread       Thread?   @relation(fields: [threadId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([threadId])
+  @@map("email_drafts")
+}
+
+model AiSummary {
+  id          String   @id @default(cuid())
+  threadId    String   @unique
+  summary     String   @db.Text
+  keyPoints   String[] @default([])
+  actionItems String[] @default([])
+  provider    String   @default("openai")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  thread      Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@map("ai_summaries")
 }
 
 

@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import Layout from '../../shared/layout/Layout';
 import Loader from '../../shared/ui/Loader';
 import EmptyState from '../../shared/ui/EmptyState';
@@ -7,6 +7,7 @@ import { useAuth } from '../../hooks/useAuth';
 
 // Lazy load feature pages for optimal code splitting
 const DashboardPage = lazy(() => import('../../features/dashboard/pages/DashboardPage'));
+const InboxPage = lazy(() => import('../../features/inbox/pages/InboxPage'));
 const CampaignsPage = lazy(() => import('../../features/campaigns/pages/CampaignsPage'));
 const TemplatesPage = lazy(() => import('../../features/templates/pages/TemplatesPage'));
 const ContactsPage = lazy(() => import('../../features/contacts/pages/ContactsPage'));
@@ -19,6 +20,20 @@ const RegisterPage = lazy(() => import('../../features/auth/pages/RegisterPage')
 const ForgotPasswordPage = lazy(() => import('../../features/auth/pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('../../features/auth/pages/ResetPasswordPage'));
 const UnsubscribePage = lazy(() => import('../../features/auth/pages/UnsubscribePage'));
+
+function NotFoundPage() {
+  const navigate = useNavigate();
+  return (
+    <div className="min-h-screen bg-[var(--background)] text-[var(--text)] flex items-center justify-center p-6">
+      <EmptyState
+        title="404 — Page Not Found"
+        description="The requested page could not be located in MailPilot."
+        actionLabel="Return to Dashboard"
+        onAction={() => navigate('/', { replace: true })}
+      />
+    </div>
+  );
+}
 
 export function ProtectedRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -105,6 +120,7 @@ export function AppRoutes() {
           }
         >
           <Route index element={<DashboardPage />} />
+          <Route path="inbox" element={<InboxPage />} />
           <Route path="campaigns" element={<CampaignsPage />} />
           <Route path="templates" element={<TemplatesPage />} />
           <Route path="contacts" element={<ContactsPage />} />
@@ -114,19 +130,9 @@ export function AppRoutes() {
           <Route path="settings" element={<SettingsPage />} />
         </Route>
 
-        {/* 404 */}
         <Route
           path="*"
-          element={
-            <div className="min-h-screen bg-[#14171C] text-[#F4F5F7] flex items-center justify-center p-6">
-              <EmptyState
-                title="404 — Page Not Found"
-                description="The requested page could not be located in MailPilot."
-                actionLabel="Return to Dashboard"
-                onAction={() => (window.location.href = '/')}
-              />
-            </div>
-          }
+          element={<NotFoundPage />}
         />
       </Routes>
     </Suspense>

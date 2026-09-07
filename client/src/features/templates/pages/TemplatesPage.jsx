@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../../../shared/ui/Card';
 import Button from '../../../shared/ui/Button';
@@ -6,11 +6,13 @@ import Input from '../../../shared/ui/Input';
 import Badge from '../../../shared/ui/Badge';
 import Modal from '../../../shared/ui/Modal';
 import Skeleton from '../../../shared/ui/Skeleton';
-import TemplateFormModal from '../../../shared/components/forms/TemplateFormModal';
 import ConfirmationDialog from '../../../shared/ui/ConfirmationDialog';
+import TemplateStudioModal from '../components/TemplateStudioModal';
 import { templateService } from '../../../services/templateService';
 import { aiService } from '../../../services/aiService';
 import { useToast } from '../../../hooks/useToast';
+import { STARTER_TEMPLATES } from '../data/starterTemplates';
+import { compileTemplateToHtml, compileTemplateToText } from '../utils/emailCompiler';
 import {
   FiPlus,
   FiSearch,
@@ -21,9 +23,10 @@ import {
   FiSend,
   FiZap,
   FiCopy,
-  FiCheck,
-  FiImage,
   FiCode,
+  FiSliders,
+  FiSmartphone,
+  FiMonitor,
 } from 'react-icons/fi';
 import { TemplateThumbnail, getTemplateImageSrc } from '../components/TemplateThumbnail';
 
@@ -42,19 +45,20 @@ const CATEGORIES = [
 export function TemplatesPage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
-  const [templates, setTemplates] = useState([]);
+  const [workspaceTemplates, setWorkspaceTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState(null);
-  const [deletingId, setDeletingId] = useState(null);
+  // Studio & Preview Modals
+  const [isStudioOpen, setIsStudioOpen] = useState(false);
+  const [activeStudioTemplate, setActiveStudioTemplate] = useState(null);
   const [previewTemplate, setPreviewTemplate] = useState(null);
-  const [previewViewMode, setPreviewViewMode] = useState('html'); // 'html' | 'design'
+  const [previewViewport, setPreviewViewport] = useState('desktop'); // 'desktop' | 'mobile'
+  const [deletingId, setDeletingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // AI Template Generator State
+  // AI Template Generator Modal
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiTopic, setAiTopic] = useState('');
   const [aiGoal, setAiGoal] = useState('Feature Adoption');
@@ -64,51 +68,83 @@ export function TemplatesPage() {
     try {
       setLoading(true);
       const data = await templateService.getTemplates();
-      setTemplates(data);
+      setWorkspaceTemplates(data || []);
     } catch (err) {
-      addToast({ title: 'Error', message: err.message, type: 'error' });
+      console.warn('Workspace template fetch info:', err.message);
     } finally {
       setLoading(false);
     }
-  }, [addToast]);
+  }, []);
 
   useEffect(() => {
     fetchTemplates();
   }, [fetchTemplates]);
 
-  const filteredTemplates = templates.filter((t) => {
-    const matchesSearch =
-      t.title.toLowerCase().includes(search.toLowerCase()) ||
-      (t.subject && t.subject.toLowerCase().includes(search.toLowerCase())) ||
-      (t.category && t.category.toLowerCase().includes(search.toLowerCase()));
+  // Combine 24 Starter Templates with any custom Workspace Templates (custom ones prioritized on top)
+  const allTemplates = useMemo(() => {
+    const starterMap = new Map();
+    STARTER_TEMPLATES.forEach((t) => starterMap.set(t.id, t));
 
-    const matchesCategory =
-      activeCategory === 'all' ||
-      (t.category && t.category.toLowerCase() === activeCategory.toLowerCase());
+    // Include workspace templates
+    const customList = [];
+    (workspaceTemplates || []).forEach((wt) => {
+      if (starterMap.has(wt.id)) {
+        // Overlay custom edits if user modified a starter template
+        starterMap.set(wt.id, { ...starterMap.get(wt.id), ...wt });
+      } else {
+        customList.push(wt);
+      }
+    });
 
-    return matchesSearch && matchesCategory;
-  });
+    return [...customList, ...Array.from(starterMap.values())];
+  }, [workspaceTemplates]);
 
-  const handleSave = async (payload) => {
+  // Filter templates by active category and search query
+  const filteredTemplates = useMemo(() => {
+    return allTemplates.filter((t) => {
+      const q = search.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        t.title?.toLowerCase().includes(q) ||
+        t.subject?.toLowerCase().includes(q) ||
+        t.category?.toLowerCase().includes(q);
+
+      const matchesCategory =
+        activeCategory === 'all' ||
+        (t.category && t.category.toLowerCase() === activeCategory.toLowerCase());
+
+      return matchesSearch && matchesCategory;
+    });
+  }, [allTemplates, search, activeCategory]);
+
+  // Save template from Canva-style Studio
+  const handleSaveFromStudio = async (templateData) => {
     try {
       setSubmitting(true);
-      if (editingTemplate) {
-        await templateService.updateTemplate(editingTemplate.id, payload);
-        addToast({ title: 'Template Saved', message: `"${payload.title}" updated successfully.`, type: 'success' });
+      const isCustomId = !STARTER_TEMPLATES.some((st) => st.id === templateData.id);
+
+      if (templateData.id && isCustomId && workspaceTemplates.some((wt) => wt.id === templateData.id)) {
+        await templateService.updateTemplate(templateData.id, templateData);
+        addToast({ title: 'Template Saved', message: `"${templateData.title}" updated in your workspace.`, type: 'success' });
       } else {
-        await templateService.createTemplate(payload);
-        addToast({ title: 'Template Created', message: `"${payload.title}" added to your workspace library.`, type: 'success' });
+        // Create new or custom override
+        const created = await templateService.createTemplate({
+          ...templateData,
+          title: templateData.title || 'Custom Template',
+        });
+        addToast({ title: 'Template Saved', message: `"${templateData.title}" saved to your workspace library.`, type: 'success' });
       }
-      setIsModalOpen(false);
-      setEditingTemplate(null);
+      setIsStudioOpen(false);
+      setActiveStudioTemplate(null);
       fetchTemplates();
     } catch (err) {
-      addToast({ title: 'Error', message: err.message, type: 'error' });
+      addToast({ title: 'Error Saving Template', message: err.message, type: 'error' });
     } finally {
       setSubmitting(false);
     }
   };
 
+  // Duplicate / Clone Template
   const handleDuplicate = async (tmpl) => {
     try {
       setSubmitting(true);
@@ -116,35 +152,39 @@ export function TemplatesPage() {
         title: `${tmpl.title} (Custom Copy)`,
         subject: tmpl.subject || 'Special Update',
         category: tmpl.category || 'custom',
-        body: tmpl.body || '',
-        htmlBody: tmpl.htmlBody || '',
-        thumbnail: tmpl.thumbnail || `/templates/${tmpl.id}.svg`,
+        body: tmpl.body || compileTemplateToText(tmpl),
+        htmlBody: tmpl.htmlBody || compileTemplateToHtml(tmpl),
+        thumbnail: tmpl.thumbnail || getTemplateImageSrc(tmpl),
+        blocks: tmpl.blocks || undefined,
+        styles: tmpl.styles || undefined,
       };
       await templateService.createTemplate(duplicatePayload);
-      addToast({ title: 'Template Cloned', message: `Created custom copy of "${tmpl.title}". You can now customize it.`, type: 'success' });
+      addToast({ title: 'Template Cloned', message: `Created custom copy of "${tmpl.title}".`, type: 'success' });
       fetchTemplates();
     } catch (err) {
-      addToast({ title: 'Error', message: err.message, type: 'error' });
+      addToast({ title: 'Error Duplicating', message: err.message, type: 'error' });
     } finally {
       setSubmitting(false);
     }
   };
 
+  // Delete custom template
   const handleDelete = async () => {
     if (!deletingId) return;
     try {
       setSubmitting(true);
       await templateService.deleteTemplate(deletingId);
-      addToast({ title: 'Deleted', message: 'Template removed from workspace.', type: 'info' });
+      addToast({ title: 'Deleted', message: 'Custom template removed from workspace.', type: 'info' });
       setDeletingId(null);
       fetchTemplates();
     } catch (err) {
-      addToast({ title: 'Error', message: err.message, type: 'error' });
+      addToast({ title: 'Error Deleting', message: err.message, type: 'error' });
     } finally {
       setSubmitting(false);
     }
   };
 
+  // AI Generator Form Submit
   const handleAiGenerateTemplate = async (e) => {
     e.preventDefault();
     if (!aiTopic.trim()) {
@@ -153,17 +193,35 @@ export function TemplatesPage() {
     }
     try {
       setAiLoading(true);
-      const res = await aiService.generateEmailCopy(aiTopic, aiGoal);
-      if (res.copy) {
-        await templateService.createTemplate({
+      const res = await aiService.getEmailCopy({ topic: aiTopic, goal: aiGoal });
+      if (res.copy || res) {
+        const copyData = res.copy || res;
+        const newTemplate = {
           title: `AI: ${aiTopic.slice(0, 36)}`,
-          subject: res.copy.subject || 'Special Update',
-          body: res.copy.body || '',
-          htmlBody: `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px; background: #ffffff; color: #1e293b; border-radius: 12px; border: 1px solid #e2e8f0;">${res.copy.body.replace(/\n/g, '<br/>')}</div>`,
-          thumbnail: '/templates/tmpl_05.svg',
+          subject: copyData.subject || `Update: ${aiTopic}`,
           category: 'announcement',
-        });
-        addToast({ title: 'AI Template Generated', message: 'New AI email template generated and added to your library.', type: 'success' });
+          body: copyData.body || '',
+          htmlBody: `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px; background: #ffffff; color: #1e293b; border-radius: 12px; border: 1px solid #e2e8f0;">${(copyData.body || '').replace(/\n/g, '<br/>')}</div>`,
+          thumbnail: '/templates/tmpl_05.svg',
+          styles: {
+            canvasBg: '#f8fafc',
+            cardBg: '#ffffff',
+            primaryColor: '#E8A33D',
+            textColor: '#0f172a',
+            fontFamily: 'sans-serif',
+            borderRadius: '12px',
+          },
+          blocks: [
+            { id: 'b1', type: 'header', content: { logoText: '⚡ AI GENERATED', badge: 'NEW', align: 'left' } },
+            { id: 'b2', type: 'hero', content: { title: copyData.subject || aiTopic, subtitle: copyData.previewText || '', align: 'left' } },
+            { id: 'b3', type: 'text', content: { body: copyData.body || '' } },
+            { id: 'b4', type: 'button', content: { text: 'Explore Now →', url: 'https://mailpilot.io', align: 'left', style: 'primary' } },
+            { id: 'b5', type: 'footer', content: { note: 'Sent from {{workspace_name}}.', showUnsubscribe: true } },
+          ],
+        };
+
+        await templateService.createTemplate(newTemplate);
+        addToast({ title: 'AI Template Generated', message: 'New AI email template generated and saved to your library.', type: 'success' });
         setIsAiModalOpen(false);
         setAiTopic('');
         fetchTemplates();
@@ -175,24 +233,35 @@ export function TemplatesPage() {
     }
   };
 
+  // Route to campaign creation with this template preloaded
   const handleUseInCampaign = (template) => {
-    navigate('/campaigns', { state: { selectedTemplateId: template.id } });
+    const htmlBody = template.htmlBody || compileTemplateToHtml(template);
+    const body = template.body || compileTemplateToText(template);
+
+    navigate('/campaigns', {
+      state: {
+        selectedTemplateId: template.id,
+        templateSubject: template.subject,
+        templateHtml: htmlBody,
+        templateBody: body,
+      },
+    });
   };
 
   const getCategoryCount = (catId) => {
-    if (catId === 'all') return templates.length;
-    return templates.filter((t) => t.category && t.category.toLowerCase() === catId.toLowerCase()).length;
+    if (catId === 'all') return allTemplates.length;
+    return allTemplates.filter((t) => t.category && t.category.toLowerCase() === catId.toLowerCase()).length;
   };
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto pb-12 animate-fade-in">
-      {/* Header */}
+      {/* ─── Header ─── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border)] pb-5">
         <div>
           <div className="flex items-center gap-2">
             <span className="text-[#E8A33D] text-xl">⚡</span>
             <h1 className="text-2xl font-bold font-heading text-[var(--text)]">Email Template Library</h1>
-            <Badge variant="amber">{templates.length} Ready Templates</Badge>
+            <Badge variant="amber">{allTemplates.length} Ready Templates</Badge>
           </div>
           <p className="text-sm text-[var(--text-secondary)] mt-1">
             Pick from 20+ professionally styled SaaS email layouts with live visual previews and full customizer.
@@ -210,14 +279,17 @@ export function TemplatesPage() {
           <Button
             variant="primary"
             icon={FiPlus}
-            onClick={() => { setEditingTemplate(null); setIsModalOpen(true); }}
+            onClick={() => {
+              setActiveStudioTemplate(null);
+              setIsStudioOpen(true);
+            }}
           >
             New Template
           </Button>
         </div>
       </div>
 
-      {/* Category Tabs & Search Bar */}
+      {/* ─── Category Tabs & Search Bar ─── */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
         {/* Category Filter Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
@@ -227,16 +299,20 @@ export function TemplatesPage() {
               <button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
-                className={`px-3 py-1.5 text-xs font-mono font-medium rounded-lg whitespace-nowrap flex items-center gap-1.5 transition-colors ${
+                className={`px-3 py-1.5 text-xs font-mono font-medium rounded-lg whitespace-nowrap flex items-center gap-1.5 transition-colors cursor-pointer ${
                   activeCategory === cat.id
                     ? 'bg-[#E8A33D] text-[#14171C] font-semibold shadow-xs'
                     : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] border border-[var(--border)]'
                 }`}
               >
                 <span>{cat.label}</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                  activeCategory === cat.id ? 'bg-[#14171C]/20 text-[#14171C]' : 'bg-[var(--border)] text-[var(--text-muted)]'
-                }`}>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                    activeCategory === cat.id
+                      ? 'bg-[#14171C]/20 text-[#14171C]'
+                      : 'bg-[var(--border)] text-[var(--text-muted)]'
+                  }`}
+                >
                   {count}
                 </span>
               </button>
@@ -255,18 +331,18 @@ export function TemplatesPage() {
         </div>
       </div>
 
-      {/* Templates Grid with Visual Artwork Cards */}
-      {loading ? (
+      {/* ─── Visual Template Grid ─── */}
+      {loading && allTemplates.length === 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <Skeleton className="h-[320px] rounded-xl" />
-          <Skeleton className="h-[320px] rounded-xl" />
-          <Skeleton className="h-[320px] rounded-xl" />
+          <Skeleton className="h-[340px] rounded-xl" />
+          <Skeleton className="h-[340px] rounded-xl" />
+          <Skeleton className="h-[340px] rounded-xl" />
         </div>
       ) : filteredTemplates.length === 0 ? (
         <div className="py-16 text-center text-[var(--text-muted)] border border-dashed border-[var(--border)] rounded-xl">
           <FiFileText className="w-8 h-8 mx-auto mb-2 text-[#E8A33D]/60" />
-          <p className="text-sm font-semibold text-[var(--text)]">No templates found in this category</p>
-          <p className="text-xs text-[var(--text-muted)] mt-1">Try selecting "All Templates" or adjust your search filter.</p>
+          <p className="text-sm font-semibold text-[var(--text)]">No templates found</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">Try searching with different keywords or switch categories.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -275,19 +351,16 @@ export function TemplatesPage() {
               key={t.id}
               className="bg-[var(--surface-card)] border border-[var(--border)] rounded-xl overflow-hidden flex flex-col justify-between card-hover shadow-sm transition-all group"
             >
-              {/* Top Visual Image / Vector Preview */}
+              {/* Top Visual Image Preview */}
               <div
-                className="relative w-full h-44 overflow-hidden cursor-pointer group/thumb bg-[var(--surface-secondary)] border-b border-[var(--border)] flex items-center justify-center"
-                onClick={() => {
-                  setPreviewViewMode('html');
-                  setPreviewTemplate(t);
-                }}
+                className="relative w-full h-48 overflow-hidden cursor-pointer group/thumb bg-[var(--surface-secondary)] border-b border-[var(--border)] flex items-center justify-center"
+                onClick={() => setPreviewTemplate(t)}
               >
                 <TemplateThumbnail
                   template={t}
                   imgClassName="group-hover/thumb:scale-105"
                 />
-                
+
                 {/* Floating Quick Action Overlay */}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2">
                   <span className="px-3 py-1.5 rounded-lg bg-[#E8A33D] text-[#14171C] text-xs font-bold font-mono flex items-center gap-1.5 shadow-lg">
@@ -304,7 +377,7 @@ export function TemplatesPage() {
               </div>
 
               {/* Card Meta & Body */}
-              <div className="p-4 space-y-2.5 flex-1 flex flex-col justify-between">
+              <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
                 <div>
                   <h3 className="text-sm font-bold font-heading text-[var(--text)] tracking-tight line-clamp-1 group-hover:text-[#E8A33D] transition-colors">
                     {t.title}
@@ -316,7 +389,7 @@ export function TemplatesPage() {
 
                 {/* Content Preview Snippet */}
                 <div className="p-2.5 bg-[var(--surface-secondary)] rounded-lg text-[11px] text-[var(--text-secondary)] line-clamp-2 font-mono leading-relaxed border border-[var(--border)]">
-                  {t.body?.slice(0, 110) || 'Custom layout...'}
+                  {t.previewText || t.body?.slice(0, 110) || 'Responsive email layout...'}
                 </div>
 
                 {/* Actions Toolbar */}
@@ -325,13 +398,13 @@ export function TemplatesPage() {
                     <Button
                       size="xs"
                       variant="outline"
-                      icon={FiEye}
+                      icon={FiSliders}
                       onClick={() => {
-                        setPreviewViewMode('html');
-                        setPreviewTemplate(t);
+                        setActiveStudioTemplate(t);
+                        setIsStudioOpen(true);
                       }}
                     >
-                      Preview
+                      Customize
                     </Button>
                     <Button
                       size="xs"
@@ -343,29 +416,35 @@ export function TemplatesPage() {
                     </Button>
                   </div>
 
-                  {/* Edit, Clone, Delete */}
+                  {/* Actions: Edit in Studio, Clone, Delete */}
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => { setEditingTemplate(t); setIsModalOpen(true); }}
-                      className="p-1.5 text-[var(--text-secondary)] hover:text-[#E8A33D] hover:bg-[var(--surface-hover)] rounded transition-colors"
-                      title="Edit / Customize Template"
+                      onClick={() => {
+                        setActiveStudioTemplate(t);
+                        setIsStudioOpen(true);
+                      }}
+                      className="p-1.5 text-[var(--text-secondary)] hover:text-[#E8A33D] hover:bg-[var(--surface-hover)] rounded transition-colors cursor-pointer"
+                      title="Open in Canva-Style Studio"
                     >
                       <FiEdit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => handleDuplicate(t)}
-                      className="p-1.5 text-[var(--text-secondary)] hover:text-[#3E6B70] hover:bg-[var(--surface-hover)] rounded transition-colors"
+                      className="p-1.5 text-[var(--text-secondary)] hover:text-[#3E6B70] hover:bg-[var(--surface-hover)] rounded transition-colors cursor-pointer"
                       title="Duplicate / Clone Template"
                     >
                       <FiCopy className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                      onClick={() => setDeletingId(t.id)}
-                      className="p-1.5 text-[var(--text-secondary)] hover:text-[#EF4444] hover:bg-[#EF4444]/10 rounded transition-colors"
-                      title="Delete Template"
-                    >
-                      <FiTrash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {/* Delete only if user-created custom template */}
+                    {workspaceTemplates.some((wt) => wt.id === t.id) && (
+                      <button
+                        onClick={() => setDeletingId(t.id)}
+                        className="p-1.5 text-[var(--text-secondary)] hover:text-[#EF4444] hover:bg-[#EF4444]/10 rounded transition-colors cursor-pointer"
+                        title="Delete Custom Template"
+                      >
+                        <FiTrash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -374,84 +453,84 @@ export function TemplatesPage() {
         </div>
       )}
 
-      {/* Rendered HTML & Visual Design Preview Modal */}
+      {/* ─── Live Rendered Email Preview Modal ─── */}
       {previewTemplate && (
         <Modal
           isOpen={Boolean(previewTemplate)}
           onClose={() => setPreviewTemplate(null)}
           title={previewTemplate.title}
-          subtitle={`Default Subject: ${previewTemplate.subject || 'N/A'}`}
+          subtitle={`Subject: ${previewTemplate.subject || 'N/A'}`}
           maxWidth="max-w-3xl"
         >
           <div className="space-y-4">
-            {/* View Mode Switcher */}
+            {/* Modal Controls */}
             <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">
               <span className="text-xs font-mono text-[var(--text-muted)]">
                 Category: <strong className="text-[var(--text)] capitalize">{previewTemplate.category}</strong>
               </span>
 
-              <div className="flex rounded-lg bg-[var(--surface-secondary)] p-0.5 border border-[var(--border)]">
+              {/* Viewport Switcher */}
+              <div className="flex items-center gap-1 bg-[var(--surface-secondary)] p-0.5 rounded-lg border border-[var(--border)]">
                 <button
                   type="button"
-                  onClick={() => setPreviewViewMode('html')}
-                  className={`px-3 py-1 text-xs font-mono rounded-md flex items-center gap-1.5 transition-colors ${
-                    previewViewMode === 'html'
+                  onClick={() => setPreviewViewport('desktop')}
+                  className={`px-2.5 py-1 text-xs font-mono rounded flex items-center gap-1.5 transition-colors cursor-pointer ${
+                    previewViewport === 'desktop'
                       ? 'bg-[#E8A33D] text-[#14171C] font-semibold'
                       : 'text-[var(--text-secondary)] hover:text-[var(--text)]'
                   }`}
                 >
-                  <FiCode className="w-3 h-3" />
-                  Rendered Email
+                  <FiMonitor className="w-3 h-3" />
+                  Desktop (600px)
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPreviewViewMode('design')}
-                  className={`px-3 py-1 text-xs font-mono rounded-md flex items-center gap-1.5 transition-colors ${
-                    previewViewMode === 'design'
+                  onClick={() => setPreviewViewport('mobile')}
+                  className={`px-2.5 py-1 text-xs font-mono rounded flex items-center gap-1.5 transition-colors cursor-pointer ${
+                    previewViewport === 'mobile'
                       ? 'bg-[#E8A33D] text-[#14171C] font-semibold'
                       : 'text-[var(--text-secondary)] hover:text-[var(--text)]'
                   }`}
                 >
-                  <FiImage className="w-3 h-3" />
-                  Visual Layout Card
+                  <FiSmartphone className="w-3 h-3" />
+                  Mobile (360px)
                 </button>
               </div>
             </div>
 
-            {/* Preview Frame */}
-            {previewViewMode === 'html' ? (
-              <div className="p-5 bg-white text-slate-900 rounded-xl max-h-[420px] overflow-y-auto border border-slate-200 shadow-inner">
+            {/* Email Preview Frame */}
+            <div className="flex justify-center bg-slate-900/50 p-4 rounded-xl border border-[var(--border)] overflow-x-auto">
+              <div
+                className="bg-white text-slate-900 rounded-xl shadow-2xl p-5 overflow-y-auto max-h-[440px] transition-all duration-200"
+                style={{
+                  width: previewViewport === 'mobile' ? '360px' : '600px',
+                  maxWidth: '100%',
+                }}
+              >
                 <div
                   dangerouslySetInnerHTML={{
                     __html:
                       previewTemplate.htmlBody ||
-                      `<p style="font-family: sans-serif; padding: 16px; color: #1e293b;">${previewTemplate.body.replace(/\n/g, '<br/>')}</p>`,
+                      compileTemplateToHtml(previewTemplate),
                   }}
                 />
               </div>
-            ) : (
-              <div className="rounded-xl overflow-hidden border border-[var(--border)] bg-[#0F1318] flex items-center justify-center p-2">
-                <img
-                  src={getTemplateImageSrc(previewTemplate)}
-                  alt={previewTemplate.title}
-                  className="w-full max-h-[380px] object-contain rounded-lg"
-                />
-              </div>
-            )}
+            </div>
 
+            {/* Modal Actions */}
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--border)]">
               <Button
                 variant="outline"
                 size="sm"
-                icon={FiEdit2}
+                icon={FiSliders}
                 onClick={() => {
                   const sel = previewTemplate;
                   setPreviewTemplate(null);
-                  setEditingTemplate(sel);
-                  setIsModalOpen(true);
+                  setActiveStudioTemplate(sel);
+                  setIsStudioOpen(true);
                 }}
               >
-                Edit Template
+                Customize in Studio
               </Button>
               <Button
                 variant="primary"
@@ -470,7 +549,23 @@ export function TemplatesPage() {
         </Modal>
       )}
 
-      {/* AI Generate Template Modal */}
+      {/* ─── Canva-Style Template Studio Customizer Modal ─── */}
+      <TemplateStudioModal
+        isOpen={isStudioOpen}
+        onClose={() => {
+          setIsStudioOpen(false);
+          setActiveStudioTemplate(null);
+        }}
+        initialTemplate={activeStudioTemplate}
+        onSave={handleSaveFromStudio}
+        onUseInCampaign={(tmpl) => {
+          setIsStudioOpen(false);
+          handleUseInCampaign(tmpl);
+        }}
+        loading={submitting}
+      />
+
+      {/* ─── AI Template Generator Modal ─── */}
       {isAiModalOpen && (
         <Modal
           isOpen={isAiModalOpen}
@@ -516,22 +611,13 @@ export function TemplatesPage() {
         </Modal>
       )}
 
-      {/* Create / Edit Template Modal */}
-      <TemplateFormModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSubmit={handleSave}
-        initialData={editingTemplate}
-        loading={submitting}
-      />
-
-      {/* Delete Confirmation Dialog */}
+      {/* ─── Delete Confirmation Dialog ─── */}
       <ConfirmationDialog
         isOpen={Boolean(deletingId)}
         onClose={() => setDeletingId(null)}
         onConfirm={handleDelete}
         title="Delete Template"
-        message="Are you sure you want to delete this template? Any existing campaigns created with this template will retain their compiled copy."
+        message="Are you sure you want to delete this template from your workspace? Existing campaigns created with this template will retain their compiled copy."
         loading={submitting}
       />
     </div>

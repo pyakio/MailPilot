@@ -52,6 +52,10 @@ export const RecentCampaignsTable = React.memo(function RecentCampaignsTable({
         return <Badge variant="success">Sent</Badge>;
       case 'SCHEDULED':
         return <Badge variant="warning">Scheduled</Badge>;
+      case 'SENDING':
+        return <Badge variant="steel">Sending...</Badge>;
+      case 'FAILED':
+        return <Badge variant="danger">Failed</Badge>;
       case 'DRAFT':
       default:
         return <Badge variant="default">Draft</Badge>;
@@ -65,6 +69,10 @@ export const RecentCampaignsTable = React.memo(function RecentCampaignsTable({
         return '#22C55E';
       case 'SCHEDULED':
         return '#F59E0B';
+      case 'SENDING':
+        return '#3B82F6';
+      case 'FAILED':
+        return '#EF4444';
       case 'DRAFT':
       default:
         return '#3E6B70';

@@ -4,6 +4,51 @@ All notable changes to the **MailPilot** project will be documented in this file
 
 ---
 
+## [0.7.0] - 2026-08-23
+
+### Phase 2: Multi-Tenancy Authorization Hardening
+- **requireRole Workspace Scoping (BUG-009)**:
+  - Updated `server/middlewares/auth.middleware.js` `requireRole` to resolve workspace membership by `userId AND workspaceId` (from `x-workspace-id` request header) instead of the first membership found.
+  - Removed silent `ADMIN` default fallback — returns 403 if no membership found.
+  - Attaches `req.activeWorkspaceId` for downstream use.
+
+### Phase 3: Real Data & Feature Completion
+- **Analytics Real Device & Hourly Aggregation**:
+  - Added `classifyUserAgent()` in `server/controllers/analytics.controller.js` to parse `EmailEvent.metadata.userAgent` into Apple Mail (iOS/Desktop), Gmail, Outlook, Android Mail, Thunderbird, Other buckets.
+  - Added `deviceShare` (percentage per client) and `hourlyTrend` (24-hour bucket aggregation in 2h slots) to `GET /api/analytics` response. `DeviceBreakdownChart` and `HourlyEngagementChart` now render real data instead of hardcoded mock arrays.
+- **Notification Center UI**:
+  - Rewrote `client/src/shared/layout/TopNavbar.jsx` to mount a real notification bell icon with unread count badge.
+  - Bell click opens a live dropdown panel showing per-notification rows with type icons (success/warning/info), read state, and per-notification + mark-all-read actions.
+  - Notifications are fetched on mount and polled every 60 seconds via existing `notificationService.js`.
+- **CommandPalette CSS Variable Fix**:
+  - Replaced all hardcoded dark surface colors (`bg-[#1D2127]`, `bg-[#181C20]`, `bg-[#252A31]`) in `CommandPalette.jsx` with theme CSS variables (`var(--surface-card)`, `var(--surface-secondary)`, `var(--surface-hover)`, `var(--border)`, `var(--text)`, `var(--text-muted)`).
+  - Fixed AI command actions to navigate to `/ai-workspace` instead of `/templates`.
+  - Replaced hardcoded footer text with `MailPilot Command Engine`.
+
+### Phase 4: Codebase Cleanup (Dead Code Removal)
+- Deleted 8 unused UI components: `PageHeader.jsx`, `SectionHeader.jsx`, `Pagination.jsx`, `Tabs.jsx`, `StatCard.jsx`, `MetricCard.jsx`, `ContactsTable.jsx`, `TemplatesGrid.jsx`.
+- Deleted empty `client/src/shared/components/feedback/` directory.
+
+---
+
+## [0.6.0] - 2026-08-23
+
+### Phase 1: P0/P1 Critical Runtime Fixes & Schema Alignment
+- **Campaign Service Contract (BUG-013)**:
+  - Added `sendCampaign` alias to `client/src/services/campaignService.js` to match calls in `DashboardPage.jsx` and `CampaignsPage.jsx`, resolving `TypeError: sendCampaign is not a function`.
+- **AI Service Method & Argument Normalization (BUG-014 & BUG-015)**:
+  - Added `generateSubjectLines`, `generateEmailCopy`, `analyzeSpam` aliases in `client/src/services/aiService.js`.
+  - Added argument normalization for positional parameters from `AiWorkspacePage.jsx`, `TemplatesPage.jsx`, and `CampaignFormModal.jsx` into expected JSON object payloads `{ topic, audience, tone, goal, subject, content }`.
+- **Settings Profile Update Binding (BUG-016)**:
+  - Updated `client/src/features/settings/pages/SettingsPage.jsx` to import `settingsService` (instead of `authService`) and propagate user updates via `updateUser(res.user)` in `AuthContext`.
+- **Unsubscribe Response Handling (BUG-017)**:
+  - Fixed double `.data` access in `client/src/features/auth/pages/UnsubscribePage.jsx` to prevent TypeErrors on verified tokens.
+- **Prisma Schema & Migration Alignment (BUG-018 & BUG-019)**:
+  - Added `thumbnail String?` to `model Template` in `prisma/schema.prisma`.
+  - Created migration `20260823000001_add_telemetry_notifications_subscriptions` adding unmigrated tables (`notifications`, `email_events`, `password_reset_tokens`, `subscriptions`), enums (`EmailEventType`, `PlanTier`, `SubscriptionStatus`), and `thumbnail` column on `templates`.
+
+---
+
 ## [0.5.0] - 2026-08-13
 
 ### Full-Stack SaaS Foundation & Database Integration Complete

@@ -31,17 +31,17 @@ export function CommandPalette({ isOpen, onClose }) {
           label: 'Generate Subject Line',
           icon: FiCpu,
           action: () => {
-            addToast({ title: 'AI Copilot', message: 'Generating subject line variations...', type: 'info' });
-            navigate('/templates');
+            onClose();
+            navigate('/ai-workspace');
           },
         },
         {
-          id: 'ai-[#3B82F6]',
+          id: 'ai-copy',
           label: 'Generate Full Email',
           icon: FiZap,
           action: () => {
-            addToast({ title: 'AI Copilot', message: 'Opening AI Email Builder...', type: 'info' });
-            navigate('/templates');
+            onClose();
+            navigate('/ai-workspace');
           },
         },
         {
@@ -50,6 +50,7 @@ export function CommandPalette({ isOpen, onClose }) {
           icon: FiCpu,
           action: () => {
             addToast({ title: 'AI Copilot', message: 'Auditing email sender domain & SPF...', type: 'success' });
+            onClose();
             navigate('/settings');
           },
         },
@@ -126,23 +127,23 @@ export function CommandPalette({ isOpen, onClose }) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[620px] bg-[#1D2127] border border-[rgba(255,255,255,0.06)] rounded-[16px] shadow-2xl overflow-hidden"
+        className="w-full max-w-[620px] bg-[var(--surface-card)] border border-[var(--border)] rounded-[16px] shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input Bar */}
-        <div className="flex items-center px-5 h-[56px] border-b border-[rgba(255,255,255,0.05)]">
-          <FiSearch className="w-5 h-5 text-[#9CA3AF] mr-3 shrink-0" />
+        <div className="flex items-center px-5 h-[56px] border-b border-[var(--border)]">
+          <FiSearch className="w-5 h-5 text-[var(--text-secondary)] mr-3 shrink-0" />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search campaigns, audience, AI commands..."
-            className="w-full h-full bg-transparent text-[15px] text-[#F8FAFC] placeholder-[#9CA3AF] focus:outline-none"
+            className="w-full h-full bg-transparent text-[15px] text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none"
           />
           <button
             onClick={onClose}
-            className="p-1 rounded-[6px] text-[#9CA3AF] hover:text-[#F8FAFC] hover:bg-[#252A31] transition-colors ml-2"
+            className="p-1 rounded-[6px] text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors ml-2"
             title="Close"
           >
             <FiX className="w-4 h-4" />
@@ -152,13 +153,13 @@ export function CommandPalette({ isOpen, onClose }) {
         {/* Results List */}
         <div className="max-h-[380px] overflow-y-auto p-2 space-y-4">
           {filteredGroups.length === 0 ? (
-            <p className="py-8 text-center text-[14px] text-[#9CA3AF]">
+            <p className="py-8 text-center text-[14px] text-[var(--text-muted)]">
               No items found matching "{query}".
             </p>
           ) : (
             filteredGroups.map((group, groupIdx) => (
               <div key={groupIdx} className="space-y-1">
-                <span className="px-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider block mb-1">
+                <span className="px-3 text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider block mb-1">
                   {group.category}
                 </span>
                 {group.items.map((item) => {
@@ -167,13 +168,13 @@ export function CommandPalette({ isOpen, onClose }) {
                     <div
                       key={item.id}
                       onClick={() => handleSelect(item)}
-                      className="flex items-center justify-between px-3 h-[42px] rounded-[10px] text-[14px] text-[#9CA3AF] hover:text-[#F8FAFC] hover:bg-[#252A31] cursor-pointer transition-colors group"
+                      className="flex items-center justify-between px-3 h-[42px] rounded-[10px] text-[14px] text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] cursor-pointer transition-colors group"
                     >
                       <div className="flex items-center gap-3">
-                        <Icon className="w-4 h-4 text-[#9CA3AF] group-hover:text-[#3B82F6] transition-colors" />
+                        <Icon className="w-4 h-4 text-[var(--text-secondary)] group-hover:text-[#E8A33D] transition-colors" />
                         <span>{item.label}</span>
                       </div>
-                      <div className="flex items-center gap-1 text-[12px] text-[#6B7280]">
+                      <div className="flex items-center gap-1 text-[12px] text-[var(--text-muted)]">
                         <span>Run</span>
                         <FiCornerDownLeft className="w-3 h-3" />
                       </div>
@@ -186,9 +187,9 @@ export function CommandPalette({ isOpen, onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="h-[40px] px-4 bg-[#181C20] border-t border-[rgba(255,255,255,0.05)] flex items-center justify-between text-[12px] text-[#6B7280]">
-          <span>Press <kbd className="font-mono text-[#F8FAFC]">Esc</kbd> to close</span>
-          <span>Raycast Copilot Engine</span>
+        <div className="h-[40px] px-4 bg-[var(--surface-secondary)] border-t border-[var(--border)] flex items-center justify-between text-[12px] text-[var(--text-muted)]">
+          <span>Press <kbd className="font-mono text-[var(--text)]">Esc</kbd> to close</span>
+          <span>MailPilot Command Engine</span>
         </div>
       </div>
     </div>

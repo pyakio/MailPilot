@@ -7,11 +7,15 @@ const {
   getMe,
   updateProfile,
   googleAuth,
+  getGoogleAuthUrl,
+  googleOAuthCallback,
+  getGmailStatus,
+  disconnectGmail,
   forgotPassword,
   resetPassword,
   status,
 } = require('../controllers/auth.controller');
-const { authMiddleware } = require('../middlewares/auth.middleware');
+const { authMiddleware, optionalAuth } = require('../middlewares/auth.middleware');
 const { validate } = require('../validators/validate.middleware');
 const {
   registerSchema,
@@ -42,13 +46,15 @@ router.post('/auth/register', authLimiter, validate(registerSchema), register);
 router.post('/auth/login', authLimiter, validate(loginSchema), login);
 router.post('/auth/logout', logout);
 router.post('/auth/google', authLimiter, validate(googleAuthSchema), googleAuth);
+router.get('/auth/google/url', authLimiter, optionalAuth, getGoogleAuthUrl);
+router.get('/auth/google/callback', googleOAuthCallback);
 router.post('/auth/forgot-password', authLimiter, validate(forgotPasswordSchema), forgotPassword);
 router.post('/auth/reset-password', authLimiter, validate(resetPasswordSchema), resetPassword);
 
 // Protected routes
 router.get('/auth/me', authMiddleware, getMe);
 router.put('/auth/profile', authMiddleware, validate(updateProfileSchema), updateProfile);
+router.get('/auth/gmail/status', authMiddleware, getGmailStatus);
+router.post('/auth/gmail/disconnect', authMiddleware, disconnectGmail);
 
 module.exports = router;
-
-

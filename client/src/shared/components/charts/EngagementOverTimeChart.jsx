@@ -13,8 +13,8 @@ import {
 export function EngagementOverTimeChart({ data }) {
   if (!data || data.length === 0 || data.every((d) => d.Opens === 0 && d.Clicks === 0)) {
     return (
-      <div className="h-64 flex flex-col items-center justify-center text-xs text-[#6B7280] font-mono border border-dashed border-[rgba(255,255,255,0.06)] rounded-lg p-6">
-        <span className="text-sm font-semibold text-[#9CA3AF] mb-1">No Engagement Recorded</span>
+      <div className="h-64 flex flex-col items-center justify-center text-xs text-[var(--text-muted)] font-mono border border-dashed border-[var(--border)] rounded-lg p-6">
+        <span className="text-sm font-semibold text-[var(--text-secondary)] mb-1">No Engagement Recorded</span>
         <span>Broadcast a campaign and view recipient opens & clicks live over time.</span>
       </div>
     );

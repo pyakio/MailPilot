@@ -14,7 +14,7 @@ export function ConfirmationDialog({
 }) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} maxWidth="max-w-md">
-      <p className="text-xs text-[#94A3B8] leading-relaxed mb-6">{message}</p>
+      <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-6">{message}</p>
 
       <div className="flex items-center justify-end gap-2.5">
         <Button variant="outline" size="sm" onClick={onClose} disabled={loading}>

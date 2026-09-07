@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Card from '../../../shared/ui/Card';
 import Button from '../../../shared/ui/Button';
 import Input from '../../../shared/ui/Input';
 import Badge from '../../../shared/ui/Badge';
 import { useAuth } from '../../../hooks/useAuth';
 import { useToast } from '../../../hooks/useToast';
-import { authService } from '../../../services/authService';
+import { settingsService } from '../../../services/settingsService';
+import { inboxService } from '../../../services/inboxService';
 import {
   FiUser,
   FiLock,
@@ -17,6 +18,12 @@ import {
   FiZap,
   FiAlertCircle,
   FiCode,
+  FiMail,
+  FiRefreshCw,
+  FiShield,
+  FiCheckCircle,
+  FiActivity,
+  FiTrash2,
 } from 'react-icons/fi';
 
 const PLAN_TIERS = [
@@ -63,23 +70,47 @@ const PLAN_TIERS = [
 ];
 
 export function SettingsPage() {
-  const { user, login } = useAuth();
+  const { user, updateUser } = useAuth();
   const { addToast } = useToast();
 
-  const [activeTab, setActiveTab] = useState('general'); // 'general' | 'billing' | 'developer'
+  const [activeTab, setActiveTab] = useState('general'); // 'general' | 'gmail' | 'billing' | 'developer'
   const [name, setName] = useState(user?.name || '');
   const [email] = useState(user?.email || '');
   const [senderDomain, setSenderDomain] = useState('mail.pilot-app.io');
   const [loading, setLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('growth');
 
+  // Gmail Sync Status State
+  const [gmailStatus, setGmailStatus] = useState({ connected: false });
+  const [loadingGmail, setLoadingGmail] = useState(false);
+  const [syncingMailbox, setSyncingMailbox] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  const fetchGmailStatus = async () => {
+    setLoadingGmail(true);
+    try {
+      const res = await inboxService.getGmailStatus();
+      setGmailStatus(res || { connected: false });
+    } catch (err) {
+      // ignore
+    } finally {
+      setLoadingGmail(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'gmail') {
+      fetchGmailStatus();
+    }
+  }, [activeTab]);
+
   const handleSaveSettings = async (e) => {
     e.preventDefault();
     try {
       setLoading(true);
-      const res = await authService.updateProfile({ name });
-      if (res?.user) {
-        login(localStorage.getItem('token'), res.user);
+      const res = await settingsService.updateProfile({ name });
+      if (res?.user && updateUser) {
+        updateUser(res.user);
       }
       addToast({
         title: 'Settings Saved',
@@ -94,6 +125,67 @@ export function SettingsPage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConnectGmail = async () => {
+    try {
+      const res = await inboxService.getGoogleAuthUrl();
+      if (res?.url) {
+        window.location.href = res.url;
+      }
+    } catch (err) {
+      addToast({
+        title: 'OAuth Error',
+        message: 'Could not initialize Google OAuth login.',
+        type: 'error',
+      });
+    }
+  };
+
+  const handleSyncMailbox = async () => {
+    setSyncingMailbox(true);
+    try {
+      const res = await inboxService.syncInbox();
+      addToast({
+        title: 'Mailbox Synchronized',
+        message: `Synced ${res.syncedThreads || 0} threads and ${res.syncedEmails || 0} messages.`,
+        type: 'success',
+      });
+      await fetchGmailStatus();
+    } catch (err) {
+      addToast({
+        title: 'Sync Failed',
+        message: err.response?.data?.error || 'Unable to sync mailbox.',
+        type: 'error',
+      });
+    } finally {
+      setSyncingMailbox(false);
+    }
+  };
+
+  const handleDisconnectGmail = async () => {
+    if (!window.confirm('Are you sure you want to disconnect your Gmail account? You can reconnect anytime.')) {
+      return;
+    }
+
+    setDisconnecting(true);
+    try {
+      await inboxService.disconnectGmail();
+      addToast({
+        title: 'Gmail Disconnected',
+        message: 'Your Google OAuth tokens have been securely wiped.',
+        type: 'success',
+      });
+      await fetchGmailStatus();
+    } catch (err) {
+      addToast({
+        title: 'Disconnection Failed',
+        message: err.response?.data?.error || 'Could not disconnect Gmail.',
+        type: 'error',
+      });
+    } finally {
+      setDisconnecting(false);
     }
   };
 
@@ -116,12 +208,12 @@ export function SettingsPage() {
             <h1 className="text-2xl font-bold font-heading text-[var(--text)]">Settings & Configuration</h1>
           </div>
           <p className="text-sm text-[var(--text-secondary)] mt-1">
-            Configure workspace preferences, subscription plans, sender domains, and developer keys.
+            Configure workspace preferences, Gmail mailbox synchronization, subscription plans, and API keys.
           </p>
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center gap-2 pt-2">
+        <div className="flex items-center gap-2 pt-2 flex-wrap">
           <button
             onClick={() => setActiveTab('general')}
             className={`px-4 py-2 text-xs font-mono font-semibold rounded-lg transition-colors ${
@@ -131,6 +223,21 @@ export function SettingsPage() {
             }`}
           >
             General Profile
+          </button>
+
+          <button
+            onClick={() => setActiveTab('gmail')}
+            className={`px-4 py-2 text-xs font-mono font-semibold rounded-lg transition-colors flex items-center gap-2 ${
+              activeTab === 'gmail'
+                ? 'bg-[#E8A33D] text-[#14171C]'
+                : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] border border-[var(--border)]'
+            }`}
+          >
+            <FiMail className="w-3.5 h-3.5" />
+            Gmail & Sync
+            {gmailStatus?.connected && (
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            )}
           </button>
 
           <button
@@ -193,80 +300,228 @@ export function SettingsPage() {
         </form>
       )}
 
+      {activeTab === 'gmail' && (
+        <div className="space-y-6">
+          <Card
+            title="Gmail Account Connection"
+            subtitle="Connect your Google Workspace or Gmail account for bi-directional synchronization and AI email processing"
+          >
+            {loadingGmail ? (
+              <div className="py-8 flex justify-center">
+                <div className="w-6 h-6 border-2 border-[#E8A33D] border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : gmailStatus?.connected ? (
+              <div className="space-y-6">
+                {/* Connected Status Card */}
+                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <span className="p-2 rounded-lg bg-emerald-500/20 text-emerald-500">
+                      <FiCheckCircle className="w-5 h-5" />
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-[var(--text)]">
+                          Connected & Synchronizing
+                        </span>
+                        <Badge variant="success">Active</Badge>
+                      </div>
+                      <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                        Connected as <strong className="text-[var(--text)] font-mono">{gmailStatus.account?.email || user?.email}</strong>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={FiRefreshCw}
+                      loading={syncingMailbox}
+                      onClick={handleSyncMailbox}
+                    >
+                      Sync Now
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      icon={FiTrash2}
+                      loading={disconnecting}
+                      onClick={handleDisconnectGmail}
+                    >
+                      Disconnect
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Diagnostics Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-xl bg-[var(--surface-secondary)] border border-[var(--border)] space-y-1">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-[var(--text-muted)]">
+                      <FiActivity className="w-4 h-4 text-[#E8A33D]" />
+                      <span>Background Sync</span>
+                    </div>
+                    <p className="text-sm font-bold text-[var(--text)] font-mono">
+                      Every 60 Seconds
+                    </p>
+                    <p className="text-[11px] text-[var(--text-muted)]">
+                      Automatic polling active
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-[var(--surface-secondary)] border border-[var(--border)] space-y-1">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-[var(--text-muted)]">
+                      <FiShield className="w-4 h-4 text-emerald-500" />
+                      <span>Token Encryption</span>
+                    </div>
+                    <p className="text-sm font-bold text-[var(--text)] font-mono">
+                      AES-256-GCM
+                    </p>
+                    <p className="text-[11px] text-[var(--text-muted)]">
+                      Encrypted at rest with auth tags
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-[var(--surface-secondary)] border border-[var(--border)] space-y-1">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-[var(--text-muted)]">
+                      <FiZap className="w-4 h-4 text-[#3E6B70] dark:text-[#6ee7b7]" />
+                      <span>Granted Scopes</span>
+                    </div>
+                    <p className="text-sm font-bold text-[var(--text)] font-mono truncate">
+                      modify, send, profile
+                    </p>
+                    <p className="text-[11px] text-[var(--text-muted)]">
+                      Full read/write capability
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="p-4 rounded-xl bg-[var(--surface-secondary)] border border-[var(--border)] flex items-start gap-3">
+                  <FiAlertCircle className="w-5 h-5 text-[#E8A33D] shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <span className="text-xs font-bold text-[var(--text)] block">
+                      No Google Account Connected
+                    </span>
+                    <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                      Connect your Google Workspace or personal Gmail account to unlock full mailbox sync, live thread view, AI summarization, and one-click compose/reply within MailPilot.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <span className="text-xs font-semibold text-[var(--text-secondary)] block">
+                    Permissions MailPilot will request:
+                  </span>
+                  <ul className="space-y-2 text-xs text-[var(--text)]">
+                    <li className="flex items-center gap-2">
+                      <FiCheckCircle className="w-4 h-4 text-emerald-500" />
+                      <span>Read, compose, send, and modify emails in your mailbox</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <FiCheckCircle className="w-4 h-4 text-emerald-500" />
+                      <span>Synchronize messages and threads into MailPilot's secure cache</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <FiCheckCircle className="w-4 h-4 text-emerald-500" />
+                      <span>Process conversation threads with AI summarization & smart reply copilots</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="pt-2">
+                  <Button variant="primary" icon={FiMail} onClick={handleConnectGmail}>
+                    Connect Gmail Account
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
       {activeTab === 'billing' && (
         <div className="space-y-6">
           {/* Usage KPIs */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Card className="p-5">
-              <span className="text-[10px] font-mono font-semibold text-[var(--text-secondary)] uppercase">Subscribers Limit</span>
-              <div className="text-2xl font-bold font-mono text-[var(--text)] mt-1">5 / 500</div>
-              <div className="w-full bg-[var(--surface-secondary)] h-2 rounded-full mt-3 overflow-hidden">
-                <div className="bg-[#22C55E] h-full w-[1%]" />
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-mono text-[var(--text-muted)] uppercase">Monthly Broadcast Volume</span>
+                  <div className="text-2xl font-bold font-mono text-[var(--text)] mt-1">
+                    4,120 / 50,000
+                  </div>
+                </div>
+                <Badge variant="success">8.2% Used</Badge>
               </div>
-              <span className="text-[11px] text-[var(--text-muted)] mt-1 block">1% of Free Tier allocated</span>
+              <div className="w-full bg-[var(--surface-secondary)] h-2 rounded-full mt-4 overflow-hidden border border-[var(--border)]">
+                <div className="bg-[#E8A33D] h-full rounded-full transition-all duration-300" style={{ width: '8.2%' }} />
+              </div>
             </Card>
 
             <Card className="p-5">
-              <span className="text-[10px] font-mono font-semibold text-[var(--text-secondary)] uppercase">Monthly Broadcast Volume</span>
-              <div className="text-2xl font-bold font-mono text-[var(--text)] mt-1">10 / 1,000</div>
-              <div className="w-full bg-[var(--surface-secondary)] h-2 rounded-full mt-3 overflow-hidden">
-                <div className="bg-[#E8A33D] h-full w-[1%]" />
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-mono text-[var(--text-muted)] uppercase">Subscribers / Contacts</span>
+                  <div className="text-2xl font-bold font-mono text-[var(--text)] mt-1">
+                    2,840 / 10,000
+                  </div>
+                </div>
+                <Badge variant="success">28.4% Used</Badge>
               </div>
-              <span className="text-[11px] text-[var(--text-muted)] mt-1 block">Resets on the 1st of each month</span>
+              <div className="w-full bg-[var(--surface-secondary)] h-2 rounded-full mt-4 overflow-hidden border border-[var(--border)]">
+                <div className="bg-[#3E6B70] h-full rounded-full transition-all duration-300" style={{ width: '28.4%' }} />
+              </div>
             </Card>
           </div>
 
-          {/* Pricing Tiers Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Pricing Tier Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
             {PLAN_TIERS.map((tier) => {
               const isSelected = selectedPlan === tier.id;
               return (
                 <div
                   key={tier.id}
-                  className={`p-6 rounded-xl border flex flex-col justify-between transition-all ${
+                  className={`p-6 rounded-2xl border flex flex-col justify-between transition-all relative ${
                     isSelected
-                      ? 'bg-[var(--surface-card)] border-[#E8A33D] shadow-lg ring-1 ring-[#E8A33D]/50'
-                      : 'bg-[var(--surface-card)] border-[var(--border)] hover:border-[var(--border-strong)]'
+                      ? 'border-[#E8A33D] bg-[#E8A33D]/5 shadow-md'
+                      : 'border-[var(--border)] bg-[var(--surface-card)] hover:border-[var(--border-strong)]'
                   }`}
                 >
+                  {tier.recommended && (
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase bg-[#E8A33D] text-[#14171C]">
+                      Most Popular
+                    </span>
+                  )}
+
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-bold text-base text-[var(--text)] font-heading">{tier.name}</h3>
-                      {tier.recommended && <Badge variant="amber">POPULAR</Badge>}
-                      {isSelected && <Badge variant="success">CURRENT</Badge>}
-                    </div>
-
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-bold font-mono text-[var(--text)]">{tier.price}</span>
-                      <span className="text-xs text-[var(--text-secondary)]">/{tier.period}</span>
-                    </div>
-
-                    <div className="py-3 border-t border-b border-[var(--border)] text-xs font-mono space-y-1 text-[var(--text-secondary)]">
-                      <div className="flex items-center gap-1.5 text-[var(--text)]">
-                        <FiZap className="w-3.5 h-3.5 text-[#E8A33D]" />
-                        <span>{tier.contactLimit}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[var(--text)]">
-                        <FiGlobe className="w-3.5 h-3.5 text-[#3E6B70]" />
-                        <span>{tier.emailLimit}</span>
+                    <div>
+                      <h3 className="text-base font-bold text-[var(--text)] font-heading">{tier.name}</h3>
+                      <div className="flex items-baseline gap-1 mt-2">
+                        <span className="text-3xl font-bold font-mono text-[var(--text)]">{tier.price}</span>
+                        <span className="text-xs font-mono text-[var(--text-muted)]">/{tier.period}</span>
                       </div>
                     </div>
 
-                    <ul className="space-y-2 text-xs text-[var(--text-secondary)]">
-                      {tier.features.map((f, idx) => (
-                        <li key={idx} className="flex items-start gap-2">
-                          <FiCheck className="w-3.5 h-3.5 text-[#22C55E] shrink-0 mt-0.5" />
-                          <span>{f}</span>
+                    <div className="space-y-1.5 text-xs text-[var(--text-secondary)] font-mono border-y border-[var(--border)] py-3">
+                      <div>• {tier.contactLimit}</div>
+                      <div>• {tier.emailLimit}</div>
+                    </div>
+
+                    <ul className="space-y-2 text-xs text-[var(--text)]">
+                      {tier.features.map((feat, i) => (
+                        <li key={i} className="flex items-center gap-2">
+                          <FiCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          <span>{feat}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
 
-                  <div className="mt-6 pt-4 border-t border-[var(--border)]">
+                  <div className="pt-6">
                     <Button
+                      variant={isSelected ? 'primary' : 'outline'}
                       fullWidth
-                      variant={isSelected ? 'outline' : 'primary'}
-                      disabled={isSelected}
                       onClick={() => handleUpgradePlan(tier.id)}
                     >
                       {isSelected ? 'Active Plan' : `Upgrade to ${tier.name}`}

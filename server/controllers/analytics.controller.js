@@ -5,6 +5,21 @@ const { getConnectionStatus, prisma } = require('../config/db');
 const { ApiError } = require('../middlewares/error.middleware');
 const { getUserWorkspaceId } = require('../services/workspace.service');
 
+/**
+ * Classifies a User-Agent string into a readable email client bucket.
+ */
+function classifyUserAgent(ua) {
+  if (!ua) return 'Other';
+  const s = ua.toLowerCase();
+  if (s.includes('iphone') || s.includes('ipad') || (s.includes('apple') && s.includes('mobile'))) return 'Apple Mail (iOS)';
+  if (s.includes('applemail') || s.includes('darwin') || s.includes('macintosh')) return 'Apple Mail (Desktop)';
+  if (s.includes('gmail') || s.includes('googleimageproxy')) return 'Gmail';
+  if (s.includes('outlook')) return 'Outlook';
+  if (s.includes('android')) return 'Android Mail';
+  if (s.includes('thunderbird')) return 'Thunderbird';
+  return 'Other';
+}
+
 async function getAnalytics(req, res, next) {
   try {
     if (!getConnectionStatus()) {
@@ -33,9 +48,10 @@ async function getAnalytics(req, res, next) {
         select: {
           eventType: true,
           createdAt: true,
+          metadata: true,
         },
         orderBy: { createdAt: 'desc' },
-        take: 1000,
+        take: 2000,
       }),
     ]);
 
@@ -134,6 +150,45 @@ async function getAnalytics(req, res, next) {
       { name: 'Bounced', count: totalBounced, fill: '#EF4444' },
     ];
 
+    // --- Real Device/Client Share from EmailEvent metadata User-Agent ---
+    const openEvents = recentEvents.filter((e) => e.eventType === 'OPENED');
+    const clientCounts = {};
+    for (const ev of openEvents) {
+      const ua = ev.metadata?.userAgent || ev.metadata?.ua || '';
+      const client = classifyUserAgent(ua);
+      clientCounts[client] = (clientCounts[client] || 0) + 1;
+    }
+
+    const CLIENT_COLORS = {
+      'Apple Mail (iOS)': '#E8A33D',
+      'Apple Mail (Desktop)': '#F59E0B',
+      Gmail: '#3E6B70',
+      Outlook: '#22C55E',
+      'Android Mail': '#6366F1',
+      Thunderbird: '#8B5CF6',
+      Other: '#6B7280',
+    };
+
+    const totalOpenEvents = openEvents.length;
+    const deviceShare = Object.entries(clientCounts).map(([name, count]) => ({
+      name,
+      value: totalOpenEvents > 0 ? Math.round((count / totalOpenEvents) * 100) : 0,
+      color: CLIENT_COLORS[name] || '#6B7280',
+    }));
+
+    // --- Real Hourly Trend: 24-hour bucket aggregation from EmailEvent timestamps ---
+    const hourlyCounts = {};
+    for (const ev of openEvents) {
+      const hour = new Date(ev.createdAt).getHours();
+      hourlyCounts[hour] = (hourlyCounts[hour] || 0) + 1;
+    }
+
+    const hourlyTrend = [];
+    for (let h = 0; h < 24; h += 2) {
+      const label = `${String(h).padStart(2, '0')}:00`;
+      hourlyTrend.push({ hour: label, opens: (hourlyCounts[h] || 0) + (hourlyCounts[h + 1] || 0) });
+    }
+
     res.json({
       totalCampaigns,
       totalContacts,
@@ -150,6 +205,8 @@ async function getAnalytics(req, res, next) {
       openTrend,
       engagementTrend,
       deliveryBreakdown,
+      deviceShare,
+      hourlyTrend,
     });
   } catch (err) {
     next(err);

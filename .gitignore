@@ -13,7 +13,9 @@ client/dist/
 .env.*
 server/.env
 client/.env
+.env.docker
 !.env.example
+!.env.docker.example
 !server/.env.example
 !client/.env.example
 

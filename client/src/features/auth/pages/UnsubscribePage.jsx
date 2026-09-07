@@ -22,13 +22,13 @@ export function UnsubscribePage() {
       unsubscribeService
         .verifyToken(token)
         .then((res) => {
-          setContactInfo(res.data);
-          if (res.data.subscribed === false) {
+          setContactInfo(res);
+          if (res?.subscribed === false) {
             setUnsubscribed(true);
           }
         })
         .catch((err) => {
-          setError('Unable to verify unsubscribe link. It may have expired.');
+          setError(err?.message || 'Unable to verify unsubscribe link. It may have expired.');
         })
         .finally(() => setLoading(false));
     }
@@ -41,7 +41,7 @@ export function UnsubscribePage() {
       await unsubscribeService.submitUnsubscribe(token);
       setUnsubscribed(true);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to process unsubscribe request.');
+      setError(err?.message || 'Failed to process unsubscribe request.');
     } finally {
       setLoading(false);
     }
@@ -50,13 +50,13 @@ export function UnsubscribePage() {
   const displayEmail = emailParam || contactInfo?.email || 'your email';
 
   return (
-    <div className="min-h-screen bg-[#14171C] flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-[#1B1E24] border border-[rgba(255,255,255,0.08)] rounded-xl p-8 shadow-2xl text-center">
+    <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-[var(--surface-card)] border border-[var(--border)] rounded-xl p-8 shadow-2xl text-center">
         <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#E8A33D]/10 border border-[#E8A33D]/20 text-[#E8A33D] mb-4">
           <FiMail className="w-6 h-6" />
         </div>
 
-        <h1 className="text-2xl font-bold font-heading text-[#F4F5F7]">Email Subscription Preferences</h1>
+        <h1 className="text-2xl font-bold font-heading text-[var(--text)]">Email Subscription Preferences</h1>
 
         {unsubscribed ? (
           <div className="mt-6 space-y-4">
@@ -79,7 +79,7 @@ export function UnsubscribePage() {
           </div>
         ) : (
           <div className="mt-6 space-y-5 text-left">
-            <p className="text-sm text-[#9CA3AF]">
+            <p className="text-sm text-[var(--text-secondary)]">
               Are you sure you want to unsubscribe <strong>{displayEmail}</strong> from all future updates and announcements?
             </p>
 

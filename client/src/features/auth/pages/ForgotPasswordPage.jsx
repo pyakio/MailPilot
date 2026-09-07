@@ -25,21 +25,21 @@ export function ForgotPasswordPage() {
       await authService.forgotPassword(email.trim());
       setSubmitted(true);
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Unable to process reset request.');
+      setError(err.message || 'Unable to process reset request.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#14171C] flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-[#1B1E24] border border-[rgba(255,255,255,0.08)] rounded-xl p-8 shadow-2xl">
+    <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-[var(--surface-card)] border border-[var(--border)] rounded-xl p-8 shadow-2xl">
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#E8A33D]/10 border border-[#E8A33D]/20 text-[#E8A33D] mb-3">
             <FiMail className="w-6 h-6" />
           </div>
-          <h1 className="text-2xl font-bold font-heading text-[#F4F5F7]">Reset your password</h1>
-          <p className="text-sm text-[#9CA3AF] mt-1">
+          <h1 className="text-2xl font-bold font-heading text-[var(--text)]">Reset your password</h1>
+          <p className="text-sm text-[var(--text-secondary)] mt-1">
             Enter your account email and we will dispatch a secure recovery link.
           </p>
         </div>
