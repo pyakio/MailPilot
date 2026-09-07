@@ -60,9 +60,8 @@ module.exports = {
   // Required to verify incoming bounce/complaint webhook payloads
   RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET || '',
 
-  // AI Assistant (OpenAI / Gemini)
-  AI_PROVIDER: process.env.AI_PROVIDER || 'openai',
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+  // AI Assistant (Gemini)
+  AI_PROVIDER: 'gemini',
   GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
 
   // Stripe Billing (Optional)

@@ -1,50 +1,74 @@
-const { OpenAI } = require('openai');
 const { GoogleGenAI } = require('@google/genai');
-const { OPENAI_API_KEY, GEMINI_API_KEY, AI_PROVIDER } = require('../config/env');
+const { GEMINI_API_KEY } = require('../config/env');
+
+// Gemini model — stable production identifier
+const GEMINI_MODEL = 'gemini-2.0-flash';
+
+// Default request timeout in ms (avoids indefinite hangs)
+const REQUEST_TIMEOUT_MS = 20000;
 
 /**
- * Multi-provider Chat Completion Abstraction (OpenAI / Gemini)
+ * Resolve and validate the Gemini API key from env.
+ * Throws a clear error if the key is missing or still a placeholder.
  */
-async function askAI({ messages, provider = process.env.AI_PROVIDER || AI_PROVIDER || 'openai' }) {
-  const selectedProvider = (provider || 'openai').toLowerCase();
-
-  if (selectedProvider === 'openai') {
-    const apiKey = process.env.OPENAI_API_KEY || OPENAI_API_KEY;
-    if (!apiKey || apiKey === 'sk-placeholder' || apiKey.startsWith('sk-placeholder')) {
-      throw new Error('OpenAI API key is missing. Please set OPENAI_API_KEY in server/.env');
-    }
-    const client = new OpenAI({ apiKey });
-    const completion = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages, // [{ role: "user", content: "..." }]
-    });
-    return completion.choices[0].message.content;
+function resolveApiKey() {
+  const apiKey = process.env.GEMINI_API_KEY || GEMINI_API_KEY;
+  if (!apiKey || apiKey.trim() === '' || apiKey.startsWith('AIza-placeholder')) {
+    throw new Error('Gemini API key is missing. Please set GEMINI_API_KEY in server/.env');
   }
+  return apiKey;
+}
 
-  if (selectedProvider === 'gemini') {
-    const apiKey = process.env.GEMINI_API_KEY || GEMINI_API_KEY;
-    if (!apiKey || apiKey === 'AIza-placeholder' || apiKey.startsWith('AIza-placeholder')) {
-      throw new Error('Gemini API key is missing. Please set GEMINI_API_KEY in server/.env');
-    }
+/**
+ * Build a GoogleGenAI client instance.
+ */
+function buildClient() {
+  return new GoogleGenAI({ apiKey: resolveApiKey() });
+}
 
-    // Initializing the SDK with custom fetch options prevents the package loop from timing out
-    const client = new GoogleGenAI({
-      apiKey
-    });
+/**
+ * Wrap a promise with a timeout so requests never hang indefinitely.
+ */
+function withTimeout(promise, ms = REQUEST_TIMEOUT_MS) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Gemini request timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
 
-    const contents = messages.map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
+/**
+ * Chat Completion — Gemini only.
+ * Accepts OpenAI-style messages array and returns the assistant reply string.
+ */
+async function askAI({ messages }) {
+  const client = buildClient();
 
-    const result = await client.models.generateContent({
-      model: 'gemini-3.6-flash', // Correct current stable fallback identifier
-      contents,
-    });
+  // Map OpenAI-style roles to Gemini roles
+  const contents = messages.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
+
+  try {
+    const result = await withTimeout(
+      client.models.generateContent({
+        model: GEMINI_MODEL,
+        contents,
+        config: {
+          systemInstruction:
+            'You are an elite, production-grade email marketing copilot built into the MailPilot workspace dashboard. ' +
+            'Help users craft high-converting subject lines, draft full email campaigns, audit deliverability, and optimize copy. ' +
+            'Maintain a professional, growth-focused, concise tone.',
+        },
+      })
+    );
     return result.text;
+  } catch (error) {
+    console.error('❌ [AI Service] Gemini completion failed:', error.message);
+    throw new Error(`Gemini API Request Error: ${error.message}`);
   }
-
-  throw new Error(`Unknown AI provider: ${provider}`);
 }
 
 const SPAM_TRIGGER_WORDS = [
@@ -70,34 +94,43 @@ const SPAM_TRIGGER_WORDS = [
 ];
 
 /**
- * Generate subject lines with AI or fallback heuristic
+ * Generate subject lines with Gemini or fallback heuristic.
  */
 async function generateSubjectLines({ topic, audience = 'General Subscribers', tone = 'Engaging' }) {
-  const apiKey = process.env.OPENAI_API_KEY || OPENAI_API_KEY;
-  if (apiKey && !apiKey.startsWith('sk-placeholder')) {
-    try {
-      const client = new OpenAI({ apiKey });
-      const completion = await client.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
+  try {
+    const client = buildClient();
+    const response = await withTimeout(
+      client.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: [
           {
-            role: 'system',
-            content: `You are an expert email marketing copywriter. Return a JSON array of exactly 5 subject line variations for the given topic and audience.
-              Each item must be an object with:
-              - "subject": string (the subject line)
-              - "tone": string ("Urgent", "Curious", "Direct", "Conversational", "Value-driven")
-              - "score": number (predicted open score between 80 and 99)
-              - "rationale": string (short 1-sentence explanation why it works)`,
+            role: 'user',
+            parts: [{
+              text:
+                `Generate exactly 5 highly-optimized email subject line variations:\n` +
+                `- Topic: ${topic}\n` +
+                `- Target Audience: ${audience}\n` +
+                `- Selected Tone Profile: ${tone}`,
+            }],
           },
-          { role: 'user', content: `Topic: ${topic}\nAudience: ${audience}\nTone: ${tone}` },
         ],
-        response_format: { type: 'json_object' },
-      });
-      const content = JSON.parse(completion.choices[0].message.content);
-      return content.variations || content.subject_lines || content;
-    } catch (err) {
-      console.warn('⚠️ [AI Service] OpenAI subject line generation failed, using heuristic fallback:', err.message);
-    }
+        config: {
+          systemInstruction:
+            'You are an expert email marketing copywriter. ' +
+            'Return a strict JSON object with a top-level array named "variations". ' +
+            'Do NOT wrap the output in markdown code fences. ' +
+            'Each item must have: ' +
+            '"subject" (string), "tone" (one of: Urgent/Curious/Direct/Conversational/Value-driven), ' +
+            '"score" (integer 80-99), "rationale" (one-sentence explanation).',
+          responseMimeType: 'application/json',
+        },
+      })
+    );
+
+    const content = JSON.parse(response.text);
+    return content.variations || content.subject_lines || content;
+  } catch (err) {
+    console.warn('⚠️ [AI Service] Gemini subject line generation failed, using heuristic fallback:', err.message);
   }
 
   // High-converting rule-based heuristic templates
@@ -137,31 +170,41 @@ async function generateSubjectLines({ topic, audience = 'General Subscribers', t
 }
 
 /**
- * Generate complete email copy
+ * Generate complete email copy with Gemini.
  */
 async function generateEmailCopy({ topic, audience = 'General Subscribers', tone = 'Professional', goal = 'Product announcement' }) {
-  const apiKey = process.env.OPENAI_API_KEY || OPENAI_API_KEY;
-  if (apiKey && !apiKey.startsWith('sk-placeholder')) {
-    try {
-      const client = new OpenAI({ apiKey });
-      const completion = await client.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
+  try {
+    const client = buildClient();
+    const response = await withTimeout(
+      client.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: [
           {
-            role: 'system',
-            content: `You are an elite email marketer for SaaS. Generate complete email copy in JSON format with fields:
-              - "subject": string
-              - "previewText": string
-              - "body": string (clean HTML formatted with paragraphs, bold highlights, and a call-to-action button)`,
+            role: 'user',
+            parts: [{
+              text:
+                `Generate a high-converting full email for:\n` +
+                `- Topic: ${topic}\n` +
+                `- Audience: ${audience}\n` +
+                `- Tone: ${tone}\n` +
+                `- Goal: ${goal}`,
+            }],
           },
-          { role: 'user', content: `Topic: ${topic}\nAudience: ${audience}\nTone: ${tone}\nGoal: ${goal}` },
         ],
-        response_format: { type: 'json_object' },
-      });
-      return JSON.parse(completion.choices[0].message.content);
-    } catch (err) {
-      console.warn('⚠️ [AI Service] OpenAI copy generation failed, using heuristic fallback:', err.message);
-    }
+        config: {
+          systemInstruction:
+            'You are an elite SaaS email marketer. ' +
+            'Respond ONLY with a raw JSON object (no markdown fences) matching this exact schema: ' +
+            '{ "subject": string, "previewText": string, "body": string }. ' +
+            '"body" must be clean, valid HTML with headings, paragraphs, a bullet list with <strong> highlights, ' +
+            'and a styled call-to-action anchor button.',
+          responseMimeType: 'application/json',
+        },
+      })
+    );
+    return JSON.parse(response.text);
+  } catch (err) {
+    console.warn('⚠️ [AI Service] Gemini copy generation failed, using heuristic fallback:', err.message);
   }
 
   const cleanTopic = (topic || 'Special Announcement').trim();
@@ -176,11 +219,7 @@ async function generateEmailCopy({ topic, audience = 'General Subscribers', tone
         <li><strong>Streamlined Workflow:</strong> Get tasks done 2x faster with zero friction.</li>
         <li><strong>Real-time Telemetry:</strong> Keep track of every key event directly from your dashboard.</li>
         <li><strong>Enhanced Reliability:</strong> Built for scale, security, and enterprise peace of mind.</li>
-      </ul>
-      <p style="margin: 28px 0;">
-        <a href="https://mailpilot.io" style="background-color: #E8A33D; color: #14171C; font-weight: 600; padding: 12px 24px; text-decoration: none; border-radius: 4px;">Explore Live Panel</a>
-      </p>
-    `,
+      </ul>`
   };
 }
 
