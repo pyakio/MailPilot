@@ -1,8 +1,8 @@
 const { GoogleGenAI } = require('@google/genai');
 const { GEMINI_API_KEY } = require('../config/env');
 
-// Gemini model — stable production identifier
-const GEMINI_MODEL = 'gemini-2.0-flash';
+// Gemini model — use gemini-3.6-flash as directed by the Gemini API
+const GEMINI_MODEL = 'gemini-3.6-flash';
 
 // Default request timeout in ms (avoids indefinite hangs)
 const REQUEST_TIMEOUT_MS = 20000;
