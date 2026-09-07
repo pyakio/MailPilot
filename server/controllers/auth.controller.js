@@ -23,10 +23,10 @@ const { encryptToken, decryptToken } = require('../services/crypto.service');
 const googleOAuthClient = new OAuth2Client(GOOGLE_CLIENT_ID || undefined);
 
 const GMAIL_OAUTH_SCOPES = [
-  'https://googleapis.com',
-  'https://googleapis.com',
-  'https://googleapis.com',
-  'https://googleapis.com',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/userinfo.profile',
+  'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/gmail.send',
 ];
 
 function getGoogleOAuth2Client() {
@@ -89,23 +89,15 @@ async function register(req, res, next) {
 
     const emailLower = email.toLowerCase().trim();
 
-    const existing = await prisma.user.findUnique({
-      where: { email: emailLower },
-    });
+    const existing = await prisma.user.findUnique({ where: { email: emailLower } });
     if (existing) throw new ApiError(409, 'An account with this email already exists.');
 
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({
-      data: {
-        name: name.trim(),
-        email: emailLower,
-        passwordHash,
-        status: 'ACTIVE',
-      },
+      data: { name: name.trim(), email: emailLower, passwordHash, status: 'ACTIVE' },
     });
 
     const workspace = await getOrCreateUserWorkspace(user.id, user.name);
-
     const token = signToken({ id: user.id, email: user.email, workspaceId: workspace.id });
     setCookieToken(res, token);
     return res.status(201).json({ success: true, user: buildUserPublic(user, workspace), token });
@@ -127,10 +119,8 @@ async function login(req, res, next) {
     }
 
     const emailLower = email.toLowerCase().trim();
+    const user = await prisma.user.findUnique({ where: { email: emailLower } });
 
-    const user = await prisma.user.findUnique({
-      where: { email: emailLower },
-    });
     if (!user || !user.passwordHash) {
       throw new ApiError(401, 'No account found with this email.');
     }
@@ -141,7 +131,6 @@ async function login(req, res, next) {
     }
 
     const workspace = await getOrCreateUserWorkspace(user.id, user.name);
-
     const token = signToken({ id: user.id, email: user.email, workspaceId: workspace.id });
     setCookieToken(res, token);
     return res.json({ success: true, user: buildUserPublic(user, workspace), token });
@@ -185,18 +174,12 @@ async function getMe(req, res, next) {
 
     let user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      include: {
-        accounts: {
-          where: { provider: 'google' },
-        },
-      },
+      include: { accounts: { where: { provider: 'google' } } },
     });
 
-    // Local developer safety recovery loop prevents dashboard 404 crashes
     if (!user) {
       if (process.env.NODE_ENV === 'development') {
-        console.warn(`⚠️ [Auth Service] Active session ID '${req.user.id}' absent from database. Generating live local hot-patch fallback record.`);
-
+        console.warn(`⚠️ [Auth Service] Active session ID absent from database. Generating live local hot-patch fallback record.`);
         user = await prisma.user.upsert({
           where: { email: req.user.email || 'developer@mailpilot.io' },
           update: { id: req.user.id },
@@ -206,9 +189,7 @@ async function getMe(req, res, next) {
             email: req.user.email || 'developer@mailpilot.io',
             status: 'ACTIVE',
           },
-          include: {
-            accounts: { where: { provider: 'google' } }
-          }
+          include: { accounts: { where: { provider: 'google' } } },
         });
       } else {
         throw new ApiError(404, 'User session invalid. Account not found.');
@@ -216,7 +197,7 @@ async function getMe(req, res, next) {
     }
 
     const workspace = await getOrCreateUserWorkspace(user.id, user.name);
-    const googleAccount = user.accounts ? user.accounts[0] : null;
+    const googleAccount = user.accounts?.[0];
     const hasGmail = Boolean(googleAccount && (googleAccount.refreshToken || googleAccount.scope?.includes('gmail')));
 
     return res.json({ success: true, user: buildUserPublic(user, workspace, 'ADMIN', hasGmail) });
@@ -243,7 +224,6 @@ async function updateProfile(req, res, next) {
     });
 
     const workspace = await getOrCreateUserWorkspace(user.id, user.name);
-
     return res.json({ success: true, user: buildUserPublic(user, workspace) });
   } catch (err) {
     next(err);
@@ -284,18 +264,18 @@ async function googleAuth(req, res, next) {
 
       googleSub = payload.sub;
       email = payload.email.toLowerCase().trim();
-      name = payload.name;
-      image = payload.picture;
+      name = payload.name || payload.given_name || email.split('@')[0];
+      image = payload.picture || null;
     }
 
     let user = await prisma.user.findFirst({
       where: {
         OR: [
           { accounts: { some: { provider: 'google', providerAccountId: googleSub } } },
-          { email }
-        ]
+          { email },
+        ],
       },
-      include: { accounts: true }
+      include: { accounts: true },
     });
 
     if (!user) {
@@ -305,26 +285,18 @@ async function googleAuth(req, res, next) {
           email,
           image,
           status: 'ACTIVE',
+          emailVerified: new Date(),
           accounts: {
-            create: {
-              type: 'oauth',
-              provider: 'google',
-              providerAccountId: googleSub,
-            }
-          }
+            create: { type: 'oauth', provider: 'google', providerAccountId: googleSub },
+          },
         },
-        include: { accounts: true }
+        include: { accounts: true },
       });
     } else {
-      const standardAccountExists = user.accounts.some(a => a.provider === 'google');
-      if (!standardAccountExists) {
+      const googleAccountExists = user.accounts.some((a) => a.provider === 'google');
+      if (!googleAccountExists) {
         await prisma.account.create({
-          data: {
-            userId: user.id,
-            type: 'oauth',
-            provider: 'google',
-            providerAccountId: googleSub,
-          }
+          data: { userId: user.id, type: 'oauth', provider: 'google', providerAccountId: googleSub },
         });
       }
     }
@@ -333,7 +305,10 @@ async function googleAuth(req, res, next) {
     const token = signToken({ id: user.id, email: user.email, workspaceId: workspace.id });
     setCookieToken(res, token);
 
-    return res.json({ success: true, user: buildUserPublic(user, workspace), token });
+    const googleAccount = user.accounts?.find((a) => a.provider === 'google');
+    const hasGmail = Boolean(googleAccount && (googleAccount.refreshToken || googleAccount.scope?.includes('gmail')));
+
+    return res.json({ success: true, user: buildUserPublic(user, workspace, 'ADMIN', hasGmail), token });
   } catch (err) {
     next(err);
   }
@@ -351,6 +326,7 @@ async function forgotPassword(req, res, next) {
     const emailLower = email.toLowerCase().trim();
     const user = await prisma.user.findUnique({ where: { email: emailLower } });
 
+    // Always return success to prevent email enumeration
     if (!user) {
       return res.json({ success: true, message: 'If an account exists with that email, a password reset link has been sent.' });
     }
@@ -567,7 +543,14 @@ async function getGmailStatus(req, res, next) {
       success: true,
       connected: isConnected,
       account: isConnected
-        ? { id: account.id, email: req.user.email, scopes: account.scope ? account.scope.split(' ') : [], hasModifyScope, hasSendScope, connectedAt: account.createdAt }
+        ? {
+            id: account.id,
+            email: req.user.email,
+            scopes: account.scope ? account.scope.split(' ') : [],
+            hasModifyScope,
+            hasSendScope,
+            connectedAt: account.createdAt,
+          }
         : null,
     });
   } catch (err) {
