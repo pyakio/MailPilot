@@ -33,7 +33,7 @@ export default function AssistantPanel({ defaultProvider = "openai" }) {
             className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-md px-2 py-1 outline-none"
           >
             <option value="openai">OpenAI (GPT-4o mini)</option>
-            <option value="gemini">Google (Gemini 2.0 Flash)</option>
+            <option value="gemini">Google (Gemini 3.6 Flash)</option>
           </select>
           {messages.length > 0 && (
             <button

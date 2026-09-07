@@ -4,8 +4,9 @@ const { GEMINI_API_KEY } = require('../config/env');
 // Gemini model — use gemini-3.6-flash as directed by the Gemini API
 const GEMINI_MODEL = 'gemini-3.6-flash';
 
-// Default request timeout in ms (avoids indefinite hangs)
-const REQUEST_TIMEOUT_MS = 20000;
+// Server-side Gemini timeout (50s) — must be less than client axios timeout (60s)
+// so the server always sends a clean error before the client hard-cuts the connection
+const REQUEST_TIMEOUT_MS = 50000;
 
 /**
  * Resolve and validate the Gemini API key from env.
