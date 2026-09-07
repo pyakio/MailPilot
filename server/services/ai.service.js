@@ -1,16 +1,14 @@
 const { GoogleGenAI } = require('@google/genai');
 const { GEMINI_API_KEY } = require('../config/env');
 
-// Gemini model — use gemini-3.6-flash as directed by the Gemini API
+// Gemini model — gemini-3.6-flash (stable, as directed by Gemini API)
 const GEMINI_MODEL = 'gemini-3.6-flash';
 
-// Server-side Gemini timeout (50s) — must be less than client axios timeout (60s)
-// so the server always sends a clean error before the client hard-cuts the connection
+// Timeout for Gemini requests (50s server-side < 60s client-side axios)
 const REQUEST_TIMEOUT_MS = 50000;
 
 /**
  * Resolve and validate the Gemini API key from env.
- * Throws a clear error if the key is missing or still a placeholder.
  */
 function resolveApiKey() {
   const apiKey = process.env.GEMINI_API_KEY || GEMINI_API_KEY;
@@ -28,18 +26,6 @@ function buildClient() {
 }
 
 /**
- * Wrap a promise with a timeout so requests never hang indefinitely.
- */
-function withTimeout(promise, ms = REQUEST_TIMEOUT_MS) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`Gemini request timed out after ${ms}ms`)), ms)
-    ),
-  ]);
-}
-
-/**
  * Chat Completion — Gemini only.
  * Accepts OpenAI-style messages array and returns the assistant reply string.
  */
@@ -52,23 +38,28 @@ async function askAI({ messages }) {
     parts: [{ text: m.content }],
   }));
 
+  // AbortSignal.timeout() properly cancels the underlying fetch connection
+  // Promise.race + setTimeout does NOT cancel fetch and causes "fetch failed"
+  const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+
   try {
-    const result = await withTimeout(
-      client.models.generateContent({
-        model: GEMINI_MODEL,
-        contents,
-        config: {
-          systemInstruction:
-            'You are an elite, production-grade email marketing copilot built into the MailPilot workspace dashboard. ' +
-            'Help users craft high-converting subject lines, draft full email campaigns, audit deliverability, and optimize copy. ' +
-            'Maintain a professional, growth-focused, concise tone.',
-        },
-      })
-    );
+    const result = await client.models.generateContent({
+      model: GEMINI_MODEL,
+      contents,
+      config: {
+        systemInstruction:
+          'You are an elite, production-grade email marketing copilot built into the MailPilot workspace dashboard. ' +
+          'Help users craft high-converting subject lines, draft full email campaigns, audit deliverability, and optimize copy. ' +
+          'Maintain a professional, growth-focused, concise tone.',
+      },
+    }, { signal });
     return result.text;
   } catch (error) {
-    console.error('❌ [AI Service] Gemini completion failed:', error.message);
-    throw new Error(`Gemini API Request Error: ${error.message}`);
+    const msg = error.name === 'TimeoutError'
+      ? `Gemini request timed out after ${REQUEST_TIMEOUT_MS / 1000}s. Please try again.`
+      : error.message;
+    console.error('❌ [AI Service] Gemini completion failed:', msg);
+    throw new Error(msg);
   }
 }
 
@@ -100,33 +91,32 @@ const SPAM_TRIGGER_WORDS = [
 async function generateSubjectLines({ topic, audience = 'General Subscribers', tone = 'Engaging' }) {
   try {
     const client = buildClient();
-    const response = await withTimeout(
-      client.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: [
-          {
-            role: 'user',
-            parts: [{
-              text:
-                `Generate exactly 5 highly-optimized email subject line variations:\n` +
-                `- Topic: ${topic}\n` +
-                `- Target Audience: ${audience}\n` +
-                `- Selected Tone Profile: ${tone}`,
-            }],
-          },
-        ],
-        config: {
-          systemInstruction:
-            'You are an expert email marketing copywriter. ' +
-            'Return a strict JSON object with a top-level array named "variations". ' +
-            'Do NOT wrap the output in markdown code fences. ' +
-            'Each item must have: ' +
-            '"subject" (string), "tone" (one of: Urgent/Curious/Direct/Conversational/Value-driven), ' +
-            '"score" (integer 80-99), "rationale" (one-sentence explanation).',
-          responseMimeType: 'application/json',
+    const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+    const response = await client.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: [
+        {
+          role: 'user',
+          parts: [{
+            text:
+              `Generate exactly 5 highly-optimized email subject line variations:\n` +
+              `- Topic: ${topic}\n` +
+              `- Target Audience: ${audience}\n` +
+              `- Selected Tone Profile: ${tone}`,
+          }],
         },
-      })
-    );
+      ],
+      config: {
+        systemInstruction:
+          'You are an expert email marketing copywriter. ' +
+          'Return a strict JSON object with a top-level array named "variations". ' +
+          'Do NOT wrap the output in markdown code fences. ' +
+          'Each item must have: ' +
+          '"subject" (string), "tone" (one of: Urgent/Curious/Direct/Conversational/Value-driven), ' +
+          '"score" (integer 80-99), "rationale" (one-sentence explanation).',
+        responseMimeType: 'application/json',
+      },
+    }, { signal });
 
     const content = JSON.parse(response.text);
     return content.variations || content.subject_lines || content;
@@ -176,33 +166,32 @@ async function generateSubjectLines({ topic, audience = 'General Subscribers', t
 async function generateEmailCopy({ topic, audience = 'General Subscribers', tone = 'Professional', goal = 'Product announcement' }) {
   try {
     const client = buildClient();
-    const response = await withTimeout(
-      client.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: [
-          {
-            role: 'user',
-            parts: [{
-              text:
-                `Generate a high-converting full email for:\n` +
-                `- Topic: ${topic}\n` +
-                `- Audience: ${audience}\n` +
-                `- Tone: ${tone}\n` +
-                `- Goal: ${goal}`,
-            }],
-          },
-        ],
-        config: {
-          systemInstruction:
-            'You are an elite SaaS email marketer. ' +
-            'Respond ONLY with a raw JSON object (no markdown fences) matching this exact schema: ' +
-            '{ "subject": string, "previewText": string, "body": string }. ' +
-            '"body" must be clean, valid HTML with headings, paragraphs, a bullet list with <strong> highlights, ' +
-            'and a styled call-to-action anchor button.',
-          responseMimeType: 'application/json',
+    const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+    const response = await client.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: [
+        {
+          role: 'user',
+          parts: [{
+            text:
+              `Generate a high-converting full email for:\n` +
+              `- Topic: ${topic}\n` +
+              `- Audience: ${audience}\n` +
+              `- Tone: ${tone}\n` +
+              `- Goal: ${goal}`,
+          }],
         },
-      })
-    );
+      ],
+      config: {
+        systemInstruction:
+          'You are an elite SaaS email marketer. ' +
+          'Respond ONLY with a raw JSON object (no markdown fences) matching this exact schema: ' +
+          '{ "subject": string, "previewText": string, "body": string }. ' +
+          '"body" must be clean, valid HTML with headings, paragraphs, a bullet list with <strong> highlights, ' +
+          'and a styled call-to-action anchor button.',
+        responseMimeType: 'application/json',
+      },
+    }, { signal });
     return JSON.parse(response.text);
   } catch (err) {
     console.warn('⚠️ [AI Service] Gemini copy generation failed, using heuristic fallback:', err.message);
