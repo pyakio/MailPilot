@@ -5,7 +5,7 @@ const { prisma, ensureDbConnected } = require('../config/db');
 const { getAuthenticatedGmailClient } = require('./gmail.service');
 const { parseGmailMessage } = require('./gmailParser.service');
 const { ApiError } = require('../middlewares/error.middleware');
-const { GOOGLE_CLIENT_ID } = require('../config/env');
+const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } = require('../config/env');
 
 /**
  * Seeds a rich, realistic demo mailbox for dev / testing environments
@@ -269,8 +269,8 @@ async function syncUserInbox(userId, options = {}) {
     throw new ApiError(404, 'No Google account connected. Please connect your Gmail account in Settings.');
   }
 
-  // If running in development without live Google Client credentials or mock token, seed rich mock mailbox
-  if (!GOOGLE_CLIENT_ID || account.accessToken?.includes('test') || account.accessToken?.includes('demo')) {
+  // If running without Google OAuth credentials configured, seed rich mock mailbox
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
     return await seedMockMailbox(userId);
   }
 

@@ -25,9 +25,11 @@ async function syncAllConnectedAccounts() {
   };
 
   try {
+    // Only sync accounts that have a refresh token (live connected accounts)
     const googleAccounts = await prisma.account.findMany({
       where: {
         provider: 'google',
+        refreshToken: { not: null },
       },
     });
 
